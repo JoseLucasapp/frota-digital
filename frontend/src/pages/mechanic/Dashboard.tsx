@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
+import { useEffect } from "react";
 
 const statusMap = {
   pending: { label: "Pendente", className: "bg-warning/20 text-warning border-0", icon: Clock },
@@ -19,6 +20,15 @@ const MechanicDashboard = () => {
   const handleStatusChange = (orderId: string, newStatus: string) => {
     toast({ title: "Status atualizado!", description: `Ordem ${orderId} atualizada para ${newStatus}.` });
   };
+
+  useEffect(() => {
+    const done = localStorage.getItem("first_login_done_mechanic") === "1";
+
+    if (!done) {
+      navigate("/first-login?role=mechanic", { replace: true });
+    }
+  }, [navigate]);
+
 
   return (
     <div className="min-h-screen bg-background">

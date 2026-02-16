@@ -4,7 +4,7 @@ import {
   Car, Fuel, Wrench, FileText, Clock, LogOut, ChevronRight, AlertTriangle
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const mockDriverData = {
   name: "Carlos Silva",
@@ -24,6 +24,15 @@ const DriverDashboard = () => {
   const navigate = useNavigate();
 
   const [status, setStatus] = useState<"parado" | "uso">("parado");
+
+    useEffect(() => {
+      const done = localStorage.getItem("first_login_done_driver") === "1";
+
+      if (!done) {
+        navigate("/first-login?role=driver", { replace: true });
+      }
+    }, [navigate]);
+
 
   return (
     <div className="min-h-screen bg-background">
