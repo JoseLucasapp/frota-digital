@@ -23,6 +23,8 @@ import DriverDocuments from "./pages/driver/Documents";
 import DriverHistory from "./pages/driver/History";
 import MechanicDashboard from "./pages/mechanic/Dashboard";
 import NotFound from "./pages/NotFound";
+import ForgotPassword from "./pages/ForgotPassword";
+import FirstLogin from "./pages/FirstLogin";
 
 const queryClient = new QueryClient();
 
@@ -36,6 +38,8 @@ const App = () => (
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/admin-login" element={<AdminLogin />} />
+          <Route path="/first-login" element={<FirstLogin />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           {/* Admin routes */}
           <Route path="/admin" element={<AdminLayout><AdminDashboard /></AdminLayout>} />
           <Route path="/admin/vehicles" element={<AdminLayout><AdminVehicles /></AdminLayout>} />
