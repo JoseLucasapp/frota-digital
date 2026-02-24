@@ -10,6 +10,12 @@ app.get('/', (req, res) => {
   res.send('Frota Digital!');
 });
 
+
+const router = express.Router();
+app.use('/api', router);
+require('./routes')(router);
+
+
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });
