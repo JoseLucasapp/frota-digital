@@ -1,4 +1,4 @@
-const { createAdminService } = require("../services/admin-service");
+const { createAdminService } = require("../services/admin.service");
 
 const createAdminController = async (req, res) => {
     try {
