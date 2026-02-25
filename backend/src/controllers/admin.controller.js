@@ -1,4 +1,4 @@
-const { createAdminService } = require("../services/admin.service");
+const { createAdminService, getAllAdminsService } = require("../services/admin.service");
 
 const createAdminController = async (req, res) => {
     try {
@@ -15,6 +15,25 @@ const createAdminController = async (req, res) => {
     }
 }
 
+const getAllAdminsController = async (req, res) => {
+  try {
+  const { email, name, cnpj, institution, page, pageSize } = req.query;
+const data = await getAllAdminsService({
+      email,
+      name,
+      cnpj,
+      institution,
+      page,
+      pageSize,
+    });
+    res.status(200).json({ success: true, data });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
 module.exports = {
-    createAdminController
+    createAdminController,
+    getAllAdminsController
 }
