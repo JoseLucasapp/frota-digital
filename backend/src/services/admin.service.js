@@ -11,6 +11,7 @@ const createAdminService = async (data) => {
     }
     return { success: true, message: 'Admin created successfully' };
 }
+
 const getAllAdminsService = async ({
   email,
   name,
