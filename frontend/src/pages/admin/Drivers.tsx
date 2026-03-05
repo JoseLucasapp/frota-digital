@@ -65,7 +65,7 @@ const AdminDrivers = () => {
         <Input placeholder="Buscar por nome ou CPF..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10 h-12 text-base bg-secondary border-border" />
       </div>
 
-      <div className="hidden md:block glass-card overflow-hidden">
+      <div className="hidden md:block glass-card">
         <table className="w-full">
           <thead>
             <tr className="border-b border-border">

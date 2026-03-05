@@ -69,7 +69,7 @@ const AdminVehicles = () => {
       </div>
 
       {/* Desktop Table */}
-      <div className="hidden md:block glass-card overflow-hidden">
+      <div className="hidden md:block glass-card">
         <table className="w-full">
           <thead>
             <tr className="border-b border-border">
