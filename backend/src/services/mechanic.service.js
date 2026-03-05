@@ -12,6 +12,11 @@ const createMechanicService = async (data) => {
     if (error) {
       throw error;
     }
+    
+    sendEmail(
+      data.email,
+      "Conta mecânico cadastrada",
+    );
     return { success: true, message: "Mechanic created successfully" };
 };
 

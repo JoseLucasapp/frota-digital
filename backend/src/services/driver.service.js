@@ -9,9 +9,16 @@ const createDriverService = async (data) => {
   delete data.password;
 
   const { error } = await supabase.from("drivers").insert(data);
+  
   if (error) {
     throw error;
   }
+  
+  sendEmail(
+    data.email,
+    "Conta motorista cadastrada",
+  );
+  
   return { success: true, message: "Driver created successfully" };
 };
 
