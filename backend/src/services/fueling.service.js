@@ -1,7 +1,7 @@
 const supabase = require("../config/supabase");
 
 const createFuelingService = async (data) => {
-    const { result, error } = await supabase
+    const { data: result, error } = await supabase
         .from("fuelings")
         .insert(data)
         .select()
@@ -66,7 +66,7 @@ const updateFuelingService = async (id, data) => {
         throw new Error("id is required");
     }
 
-    const { result, error } = await supabase
+    const { data: result, error } = await supabase
         .from("fuelings")
         .update(data)
         .eq("id", id)
