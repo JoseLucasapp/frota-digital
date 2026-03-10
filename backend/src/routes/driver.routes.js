@@ -40,7 +40,7 @@ module.exports = (router) => {
    *                 type: string
    *                 example: 124.345.678-90
    *     responses:
-   *       200:
+   *       201:
    *         description: Success
    *       400:
    *         description: Bad Request

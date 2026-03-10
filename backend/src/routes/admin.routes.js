@@ -1,4 +1,4 @@
-const {createAdminController, getAllAdminsController} = require('../controllers/admin.controller')
+const { createAdminController, getAllAdminsController } = require('../controllers/admin.controller')
 
 module.exports = (router) => {
   /**
@@ -37,7 +37,7 @@ module.exports = (router) => {
    *                 type: string
    *                 example: 12.345.678/0001-90
    *     responses:
-   *       200:
+   *       201:
    *         description: Success
    *       400:
    *         description: Bad Request
@@ -87,5 +87,5 @@ module.exports = (router) => {
     "/admin",
     async (req, res) => await getAllAdminsController(req, res),
   );
-  
+
 }
