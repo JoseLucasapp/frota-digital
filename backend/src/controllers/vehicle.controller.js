@@ -1,24 +1,25 @@
-const { createFuelingService, getAllFuelingsService, getFuelingByIdService, updateFuelingService, deleteFuelingService } = require("../services/fueling.service");
+const { createVehicleService, getAllVehiclesService, getVehicleByIdService, updateVehicleService, deleteVehicleService } = require("../services/vehicle.service");
 
-const createFuelingController = async (req, res) => {
+const createVehicleController = async (req, res) => {
     try {
         const data = req.body;
 
         if (
-            !data.vehicle_id ||
+            !data.plate ||
+            !data.make ||
+            !data.model ||
+            !data.year ||
             !data.fuel_type ||
-            data.liters == null ||
-            data.price_per_liter == null ||
-            data.current_km == null ||
-            !data.station
+            !data.current_km ||
+            !data.status
         ) {
             return res.status(400).json({
                 success: false,
                 message:
-                    "vehicle_id, fuel_type, liters, price_per_liter, current_km and station are required",
+                    "plate, make, model, year, fuel_type, current_km and status are required",
             });
         }
-        const result = await createFuelingService(data);
+        const result = await createVehicleService(data);
         res.status(201).json(result);
 
     } catch (error) {
@@ -26,10 +27,10 @@ const createFuelingController = async (req, res) => {
     }
 }
 
-const getAllFuelingsController = async (req, res) => {
+const getAllVehiclesController = async (req, res) => {
     try {
         const query = req.query;
-        const result = await getAllFuelingsService(query);
+        const result = await getAllVehiclesService(query);
         res.status(200).json(result);
 
     } catch (error) {
@@ -37,14 +38,14 @@ const getAllFuelingsController = async (req, res) => {
     }
 }
 
-const getFuelingByIdController = async (req, res) => {
+const getVehicleByIdController = async (req, res) => {
     try {
         const id = req.params.id;
-        const result = await getFuelingByIdService(id);
+        const result = await getVehicleByIdService(id);
         if (!result) {
             return res.status(404).json({
                 success: false,
-                message: "Fueling not found",
+                message: "Vehicle not found",
             });
         }
 
@@ -58,11 +59,12 @@ const getFuelingByIdController = async (req, res) => {
     }
 }
 
-const updateFuelingController = async (req, res) => {
+
+const updateVehicleController = async (req, res) => {
     try {
         const id = req.params.id;
         const data = req.body;
-        const result = await updateFuelingService(id, data);
+        const result = await updateVehicleService(id, data);
 
         return res.status(200).json({
             success: true,
@@ -74,10 +76,10 @@ const updateFuelingController = async (req, res) => {
     }
 }
 
-const deleteFuelingController = async (req, res) => {
+const deleteVehicleController = async (req, res) => {
     try {
         const id = req.params.id;
-        const result = await deleteFuelingService(id);
+        const result = await deleteVehicleService(id);
 
         return res.status(200).json({
             success: true,
@@ -89,5 +91,4 @@ const deleteFuelingController = async (req, res) => {
     }
 }
 
-
-module.exports = { createFuelingController, getAllFuelingsController, getFuelingByIdController, updateFuelingController, deleteFuelingController };
+module.exports = { createVehicleController, getAllVehiclesController, getVehicleByIdController, updateVehicleController, deleteVehicleController }

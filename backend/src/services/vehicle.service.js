@@ -1,8 +1,8 @@
 const supabase = require("../config/supabase");
 
-const createFuelingService = async (data) => {
+const createVehicleService = async (data) => {
     const { data: result, error } = await supabase
-        .from("fuelings")
+        .from("vehicles")
         .insert(data)
         .select()
         .single();
@@ -11,32 +11,40 @@ const createFuelingService = async (data) => {
     return result;
 };
 
-const getAllFuelingsService = async (query = {}) => {
+const getAllVehiclesService = async (query = {}) => {
     const page = Math.max(Number(query.page) || 1, 1);
     const limit = Math.max(Number(query.limit) || 10, 1);
+    const sortBy = query.sortBy || "created_at";
+    const sortOrder = query.sortOrder === "asc" ? true : false;
 
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
     let request = supabase
-        .from("fuelings")
+        .from("vehicles")
         .select("*", { count: "exact" });
 
-    if (query.vehicle_id) {
-        request = request.eq("vehicle_id", query.vehicle_id);
+    if (query.plate) {
+        request = request.eq("plate", query.plate);
     }
 
-    if (query.fuel_type) {
-        request = request.eq("fuel_type", query.fuel_type);
+    if (query.model) {
+        request = request.ilike("model", `%${query.model}%`);
     }
 
-    if (query.station) {
-        request = request.ilike("station", `%${query.station}%`);
+    if (query.status) {
+        request = request.eq("status", query.status);
     }
 
-    request = request.order("created_at", { ascending: false });
+    if (sortBy === "status") {
+        request = request
+            .order("status", { ascending: sortOrder })
+            .order("created_at", { ascending: false });
+    } else {
+        request = request.order("created_at", { ascending: sortOrder });
+    }
+
     request = request.range(from, to);
-
 
     const { data, error, count } = await request;
 
@@ -55,13 +63,14 @@ const getAllFuelingsService = async (query = {}) => {
     };
 };
 
-const getFuelingByIdService = async (id) => {
+
+const getVehicleByIdService = async (id) => {
     if (!id) {
         throw new Error("id is required");
     }
 
     const { data, error } = await supabase
-        .from("fuelings")
+        .from("vehicles")
         .select("*")
         .eq("id", id)
         .maybeSingle();
@@ -77,13 +86,13 @@ const getFuelingByIdService = async (id) => {
     return data;
 };
 
-const updateFuelingService = async (id, data) => {
+const updateVehicleService = async (id, data) => {
     if (!id) {
         throw new Error("id is required");
     }
 
     const { data: result, error } = await supabase
-        .from("fuelings")
+        .from("vehicles")
         .update(data)
         .eq("id", id)
         .select()
@@ -96,13 +105,13 @@ const updateFuelingService = async (id, data) => {
     return result;
 };
 
-const deleteFuelingService = async (id) => {
+const deleteVehicleService = async (id) => {
     if (!id) {
         throw new Error("id is required");
     }
 
     const { error } = await supabase
-        .from("fuelings")
+        .from("vehicles")
         .delete()
         .eq("id", id);
 
@@ -113,4 +122,4 @@ const deleteFuelingService = async (id) => {
     return { success: true };
 };
 
-module.exports = { createFuelingService, getAllFuelingsService, getFuelingByIdService, updateFuelingService, deleteFuelingService };
+module.exports = { createVehicleService, getAllVehiclesService, getVehicleByIdService, updateVehicleService, deleteVehicleService }
