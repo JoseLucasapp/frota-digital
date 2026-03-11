@@ -7,13 +7,13 @@ const loginController = async (req, res) => {
     const result = await loginService({ email, password });
     return res.json(result);
   } catch (err) {
-    return res
-      .status(500)
-      .json(err);
+    return res.status(err.statusCode || 500).json({
+      success: false,
+      message: err.message,
+    });
   }
-}
-
+};
 
 module.exports = {
   loginController,
-}
+};
