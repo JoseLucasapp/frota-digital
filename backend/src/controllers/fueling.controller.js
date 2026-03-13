@@ -1,4 +1,12 @@
-const { createFuelingService, getAllFuelingsService, getFuelingByIdService, updateFuelingService, deleteFuelingService } = require("../services/fueling.service");
+const {
+    createFuelingService,
+    getAllFuelingsService,
+    getFuelingByIdService,
+    updateFuelingService,
+    uploadFuelingReceiptService,
+    deleteFuelingReceiptService,
+    deleteFuelingService,
+} = require("../services/fueling.service");
 
 const createFuelingController = async (req, res) => {
     try {
@@ -18,29 +26,28 @@ const createFuelingController = async (req, res) => {
                     "vehicle_id, fuel_type, liters, price_per_liter, current_km and station are required",
             });
         }
-        const result = await createFuelingService(data);
-        res.status(201).json(result);
 
+        const result = await createFuelingService(data);
+        return res.status(201).json(result);
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, message: error.message });
     }
-}
+};
 
 const getAllFuelingsController = async (req, res) => {
     try {
-        const query = req.query;
-        const result = await getAllFuelingsService(query);
-        res.status(200).json(result);
-
+        const result = await getAllFuelingsService(req.query);
+        return res.status(200).json(result);
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, message: error.message });
     }
-}
+};
 
 const getFuelingByIdController = async (req, res) => {
     try {
         const id = req.params.id;
         const result = await getFuelingByIdService(id);
+
         if (!result) {
             return res.status(404).json({
                 success: false,
@@ -52,11 +59,10 @@ const getFuelingByIdController = async (req, res) => {
             success: true,
             data: result,
         });
-
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, message: error.message });
     }
-}
+};
 
 const updateFuelingController = async (req, res) => {
     try {
@@ -68,11 +74,65 @@ const updateFuelingController = async (req, res) => {
             success: true,
             data: result,
         });
-
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, message: error.message });
     }
-}
+};
+
+const uploadFuelingReceiptController = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: "file is required",
+            });
+        }
+
+        const result = await uploadFuelingReceiptService({
+            fuelingId: id,
+            file: req.file,
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Receipt uploaded successfully",
+            data: result,
+        });
+    } catch (error) {
+        const status = error.message === "Fueling not found" ? 404 : 500;
+
+        return res.status(status).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+
+const deleteFuelingReceiptController = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const result = await deleteFuelingReceiptService(id);
+
+        return res.status(200).json({
+            success: true,
+            message: "Receipt deleted successfully",
+            data: result,
+        });
+    } catch (error) {
+        let status = 500;
+
+        if (error.message === "Fueling not found") status = 404;
+        if (error.message === "receipt not found") status = 404;
+
+        return res.status(status).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
 
 const deleteFuelingController = async (req, res) => {
     try {
@@ -83,11 +143,17 @@ const deleteFuelingController = async (req, res) => {
             success: true,
             data: result,
         });
-
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, message: error.message });
     }
-}
+};
 
-
-module.exports = { createFuelingController, getAllFuelingsController, getFuelingByIdController, updateFuelingController, deleteFuelingController };
+module.exports = {
+    createFuelingController,
+    getAllFuelingsController,
+    getFuelingByIdController,
+    updateFuelingController,
+    uploadFuelingReceiptController,
+    deleteFuelingReceiptController,
+    deleteFuelingController,
+};

@@ -1,7 +1,8 @@
-const { createFuelingController, getAllFuelingsController, getFuelingByIdController, updateFuelingController, deleteFuelingController } = require("../controllers/fueling.controller");
+const { createFuelingController, getAllFuelingsController, getFuelingByIdController, updateFuelingController, deleteFuelingController, deleteFuelingReceiptController, uploadFuelingReceiptController } = require("../controllers/fueling.controller");
 const { attachUser } = require("../middlewares/attachUser.middleware");
 const { requireRole } = require("../security/role.guard");
 const { requireAuth } = require("../utils/jwt");
+const upload = require("../middlewares/multer");
 
 module.exports = (router) => {
 
@@ -181,6 +182,15 @@ module.exports = (router) => {
         async (req, res) => await updateFuelingController(req, res),
     );
 
+    router.post(
+        "/fueling/:id/receipt",
+        requireAuth,
+        attachUser,
+        requireRole("DRIVER", "ADMIN"),
+        upload.single("file"),
+        async (req, res) => await uploadFuelingReceiptController(req, res),
+    );
+
     /**
  * @swagger
  * /fueling/{id}:
@@ -206,5 +216,14 @@ module.exports = (router) => {
         attachUser,
         async (req, res) => await deleteFuelingController(req, res),
     );
+
+    router.delete(
+        "/fueling/:id/receipt",
+        requireAuth,
+        attachUser,
+        requireRole("DRIVER", "ADMIN"),
+        async (req, res) => await deleteFuelingReceiptController(req, res),
+    );
+
 
 }

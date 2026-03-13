@@ -1,4 +1,9 @@
+const path = require("path");
 const supabase = require("../config/supabase");
+const {
+    uploadFileToBucket,
+    deleteFileFromBucket,
+} = require("../utils/supabaseBucket");
 
 const createFuelingService = async (data) => {
     const { data: result, error } = await supabase
@@ -37,7 +42,6 @@ const getAllFuelingsService = async (query = {}) => {
     request = request.order("created_at", { ascending: false });
     request = request.range(from, to);
 
-
     const { data, error, count } = await request;
 
     if (error) {
@@ -70,11 +74,7 @@ const getFuelingByIdService = async (id) => {
         throw error;
     }
 
-    if (!data) {
-        return null;
-    }
-
-    return data;
+    return data || null;
 };
 
 const updateFuelingService = async (id, data) => {
@@ -96,9 +96,112 @@ const updateFuelingService = async (id, data) => {
     return result;
 };
 
+const uploadFuelingReceiptService = async ({ fuelingId, file }) => {
+    if (!fuelingId) {
+        throw new Error("fuelingId is required");
+    }
+
+    if (!file) {
+        throw new Error("file is required");
+    }
+
+    const fueling = await getFuelingByIdService(fuelingId);
+
+    if (!fueling) {
+        throw new Error("Fueling not found");
+    }
+
+    if (fueling.receipt_path) {
+        await deleteFileFromBucket({
+            bucket: "fuelings_receipts",
+            filePath: fueling.receipt_path,
+        });
+    }
+
+    const ext = path.extname(file.originalname || "");
+    const fileName = `${fuelingId}-${Date.now()}${ext}`;
+
+    const uploaded = await uploadFileToBucket({
+        bucket: "fuelings_receipts",
+        file,
+        fileName,
+        folder: `fuelings/${fuelingId}`,
+        isPublic: true,
+    });
+
+    const payload = {
+        receipt_url: uploaded.publicUrl || uploaded.url || null,
+        receipt_path: uploaded.filePath || uploaded.path || null,
+    };
+
+    const { data, error } = await supabase
+        .from("fuelings")
+        .update(payload)
+        .eq("id", fuelingId)
+        .select("*")
+        .single();
+
+    if (error) {
+        throw error;
+    }
+
+    return {
+        fueling: data,
+        file: uploaded,
+    };
+};
+
+const deleteFuelingReceiptService = async (fuelingId) => {
+    if (!fuelingId) {
+        throw new Error("fuelingId is required");
+    }
+
+    const fueling = await getFuelingByIdService(fuelingId);
+
+    if (!fueling) {
+        throw new Error("Fueling not found");
+    }
+
+    if (!fueling.receipt_path) {
+        throw new Error("receipt not found");
+    }
+
+    await deleteFileFromBucket({
+        bucket: "fuelings_receipts",
+        filePath: fueling.receipt_path,
+    });
+
+    const { data, error } = await supabase
+        .from("fuelings")
+        .update({
+            receipt_url: null,
+            receipt_path: null,
+        })
+        .eq("id", fuelingId)
+        .select("*")
+        .single();
+
+    if (error) {
+        throw error;
+    }
+
+    return {
+        fueling: data,
+    };
+};
+
 const deleteFuelingService = async (id) => {
     if (!id) {
         throw new Error("id is required");
+    }
+
+    const fueling = await getFuelingByIdService(id);
+
+    if (fueling?.receipt_path) {
+        await deleteFileFromBucket({
+            bucket: "fuelings_receipts",
+            filePath: fueling.receipt_path,
+        });
     }
 
     const { error } = await supabase
@@ -113,4 +216,12 @@ const deleteFuelingService = async (id) => {
     return { success: true };
 };
 
-module.exports = { createFuelingService, getAllFuelingsService, getFuelingByIdService, updateFuelingService, deleteFuelingService };
+module.exports = {
+    createFuelingService,
+    getAllFuelingsService,
+    getFuelingByIdService,
+    updateFuelingService,
+    uploadFuelingReceiptService,
+    deleteFuelingReceiptService,
+    deleteFuelingService,
+};

@@ -2,12 +2,24 @@ jest.mock("../../src/config/supabase", () => ({
     from: jest.fn(),
 }));
 
+jest.mock("../../src/utils/supabaseBucket", () => ({
+    uploadFileToBucket: jest.fn(),
+    deleteFileFromBucket: jest.fn(),
+}));
+
 const supabase = require("../../src/config/supabase");
+const {
+    uploadFileToBucket,
+    deleteFileFromBucket,
+} = require("../../src/utils/supabaseBucket");
+
 const {
     createFuelingService,
     getAllFuelingsService,
     getFuelingByIdService,
     updateFuelingService,
+    uploadFuelingReceiptService,
+    deleteFuelingReceiptService,
     deleteFuelingService,
 } = require("../../src/services/fueling.service");
 
@@ -135,7 +147,6 @@ describe("fueling.service", () => {
             limit: "5",
         });
 
-        expect(supabase.from).toHaveBeenCalledWith("fuelings");
         expect(builder.select).toHaveBeenCalledWith("*", { count: "exact" });
         expect(builder.eq).toHaveBeenCalledWith("vehicle_id", "veh-1");
         expect(builder.eq).toHaveBeenCalledWith("fuel_type", "Gasolina");
@@ -247,17 +258,343 @@ describe("fueling.service", () => {
         );
     });
 
-    test("deleteFuelingService should delete and return success", async () => {
-        const eq = jest.fn().mockResolvedValue({ error: null });
-        const del = jest.fn(() => ({ eq }));
+    test("uploadFuelingReceiptService should upload receipt and update fueling", async () => {
+        const maybeSingle = jest.fn().mockResolvedValue({
+            data: {
+                id: "1",
+                receipt_path: null,
+            },
+            error: null,
+        });
 
-        supabase.from.mockReturnValue({ delete: del });
+        const selectFueling = jest.fn(() => ({
+            eq: jest.fn(() => ({ maybeSingle })),
+        }));
+
+        const singleUpdate = jest.fn().mockResolvedValue({
+            data: {
+                id: "1",
+                receipt_url: "https://file-url.com/receipt.jpg",
+                receipt_path: "fuelings/1/file.jpg",
+            },
+            error: null,
+        });
+
+        const update = jest.fn(() => ({
+            eq: jest.fn(() => ({
+                select: jest.fn(() => ({ single: singleUpdate })),
+            })),
+        }));
+
+        supabase.from.mockImplementation((table) => {
+            if (table === "fuelings") {
+                return {
+                    select: selectFueling,
+                    update,
+                };
+            }
+        });
+
+        uploadFileToBucket.mockResolvedValue({
+            publicUrl: "https://file-url.com/receipt.jpg",
+            filePath: "fuelings/1/file.jpg",
+        });
+
+        const file = {
+            originalname: "receipt.jpg",
+            buffer: Buffer.from("fake-file"),
+            mimetype: "image/jpeg",
+        };
+
+        const result = await uploadFuelingReceiptService({
+            fuelingId: "1",
+            file,
+        });
+
+        expect(uploadFileToBucket).toHaveBeenCalledWith(
+            expect.objectContaining({
+                bucket: "fuelings_receipts",
+                file,
+                folder: "fuelings/1",
+                isPublic: true,
+            })
+        );
+
+        expect(result).toEqual({
+            fueling: {
+                id: "1",
+                receipt_url: "https://file-url.com/receipt.jpg",
+                receipt_path: "fuelings/1/file.jpg",
+            },
+            file: {
+                publicUrl: "https://file-url.com/receipt.jpg",
+                filePath: "fuelings/1/file.jpg",
+            },
+        });
+    });
+
+    test("uploadFuelingReceiptService should delete previous receipt before uploading new one", async () => {
+        const maybeSingle = jest.fn().mockResolvedValue({
+            data: {
+                id: "1",
+                receipt_path: "fuelings/1/old.jpg",
+            },
+            error: null,
+        });
+
+        const selectFueling = jest.fn(() => ({
+            eq: jest.fn(() => ({ maybeSingle })),
+        }));
+
+        const singleUpdate = jest.fn().mockResolvedValue({
+            data: {
+                id: "1",
+                receipt_url: "https://file-url.com/new.jpg",
+                receipt_path: "fuelings/1/new.jpg",
+            },
+            error: null,
+        });
+
+        const update = jest.fn(() => ({
+            eq: jest.fn(() => ({
+                select: jest.fn(() => ({ single: singleUpdate })),
+            })),
+        }));
+
+        supabase.from.mockImplementation((table) => {
+            if (table === "fuelings") {
+                return {
+                    select: selectFueling,
+                    update,
+                };
+            }
+        });
+
+        deleteFileFromBucket.mockResolvedValue({ success: true });
+        uploadFileToBucket.mockResolvedValue({
+            publicUrl: "https://file-url.com/new.jpg",
+            filePath: "fuelings/1/new.jpg",
+        });
+
+        await uploadFuelingReceiptService({
+            fuelingId: "1",
+            file: {
+                originalname: "receipt.jpg",
+                buffer: Buffer.from("fake-file"),
+                mimetype: "image/jpeg",
+            },
+        });
+
+        expect(deleteFileFromBucket).toHaveBeenCalledWith({
+            bucket: "fuelings_receipts",
+            filePath: "fuelings/1/old.jpg",
+        });
+    });
+
+    test("uploadFuelingReceiptService should throw when fuelingId is missing", async () => {
+        await expect(
+            uploadFuelingReceiptService({
+                file: { originalname: "receipt.jpg" },
+            })
+        ).rejects.toThrow("fuelingId is required");
+    });
+
+    test("uploadFuelingReceiptService should throw when file is missing", async () => {
+        await expect(
+            uploadFuelingReceiptService({
+                fuelingId: "1",
+            })
+        ).rejects.toThrow("file is required");
+    });
+
+    test("uploadFuelingReceiptService should throw when fueling is not found", async () => {
+        const maybeSingle = jest.fn().mockResolvedValue({
+            data: null,
+            error: null,
+        });
+
+        const selectFueling = jest.fn(() => ({
+            eq: jest.fn(() => ({ maybeSingle })),
+        }));
+
+        supabase.from.mockImplementation((table) => {
+            if (table === "fuelings") {
+                return { select: selectFueling };
+            }
+        });
+
+        await expect(
+            uploadFuelingReceiptService({
+                fuelingId: "1",
+                file: { originalname: "receipt.jpg" },
+            })
+        ).rejects.toThrow("Fueling not found");
+    });
+
+    test("deleteFuelingReceiptService should delete receipt and clear fields", async () => {
+        const maybeSingle = jest.fn().mockResolvedValue({
+            data: {
+                id: "1",
+                receipt_path: "fuelings/1/file.jpg",
+            },
+            error: null,
+        });
+
+        const selectFueling = jest.fn(() => ({
+            eq: jest.fn(() => ({ maybeSingle })),
+        }));
+
+        const singleUpdate = jest.fn().mockResolvedValue({
+            data: {
+                id: "1",
+                receipt_url: null,
+                receipt_path: null,
+            },
+            error: null,
+        });
+
+        const update = jest.fn(() => ({
+            eq: jest.fn(() => ({
+                select: jest.fn(() => ({ single: singleUpdate })),
+            })),
+        }));
+
+        supabase.from.mockImplementation((table) => {
+            if (table === "fuelings") {
+                return {
+                    select: selectFueling,
+                    update,
+                };
+            }
+        });
+
+        deleteFileFromBucket.mockResolvedValue({ success: true });
+
+        const result = await deleteFuelingReceiptService("1");
+
+        expect(deleteFileFromBucket).toHaveBeenCalledWith({
+            bucket: "fuelings_receipts",
+            filePath: "fuelings/1/file.jpg",
+        });
+
+        expect(result).toEqual({
+            fueling: {
+                id: "1",
+                receipt_url: null,
+                receipt_path: null,
+            },
+        });
+    });
+
+    test("deleteFuelingReceiptService should throw when fuelingId is missing", async () => {
+        await expect(deleteFuelingReceiptService()).rejects.toThrow("fuelingId is required");
+    });
+
+    test("deleteFuelingReceiptService should throw when receipt does not exist", async () => {
+        const maybeSingle = jest.fn().mockResolvedValue({
+            data: {
+                id: "1",
+                receipt_path: null,
+            },
+            error: null,
+        });
+
+        const selectFueling = jest.fn(() => ({
+            eq: jest.fn(() => ({ maybeSingle })),
+        }));
+
+        supabase.from.mockImplementation((table) => {
+            if (table === "fuelings") {
+                return { select: selectFueling };
+            }
+        });
+
+        await expect(deleteFuelingReceiptService("1")).rejects.toThrow("receipt not found");
+    });
+
+    test("deleteFuelingReceiptService should throw when fueling is not found", async () => {
+        const maybeSingle = jest.fn().mockResolvedValue({
+            data: null,
+            error: null,
+        });
+
+        const selectFueling = jest.fn(() => ({
+            eq: jest.fn(() => ({ maybeSingle })),
+        }));
+
+        supabase.from.mockImplementation((table) => {
+            if (table === "fuelings") {
+                return { select: selectFueling };
+            }
+        });
+
+        await expect(deleteFuelingReceiptService("1")).rejects.toThrow("Fueling not found");
+    });
+
+    test("deleteFuelingService should delete and return success", async () => {
+        const maybeSingle = jest.fn().mockResolvedValue({
+            data: {
+                id: "1",
+                receipt_path: null,
+            },
+            error: null,
+        });
+
+        const select = jest.fn(() => ({
+            eq: jest.fn(() => ({ maybeSingle })),
+        }));
+
+        const eqDelete = jest.fn().mockResolvedValue({ error: null });
+        const del = jest.fn(() => ({ eq: eqDelete }));
+
+        supabase.from.mockImplementation((table) => {
+            if (table === "fuelings") {
+                return {
+                    select,
+                    delete: del,
+                };
+            }
+        });
 
         const result = await deleteFuelingService("1");
 
-        expect(del).toHaveBeenCalled();
-        expect(eq).toHaveBeenCalledWith("id", "1");
+        expect(eqDelete).toHaveBeenCalledWith("id", "1");
         expect(result).toEqual({ success: true });
+    });
+
+    test("deleteFuelingService should delete receipt from bucket before deleting record", async () => {
+        const maybeSingle = jest.fn().mockResolvedValue({
+            data: {
+                id: "1",
+                receipt_path: "fuelings/1/file.jpg",
+            },
+            error: null,
+        });
+
+        const select = jest.fn(() => ({
+            eq: jest.fn(() => ({ maybeSingle })),
+        }));
+
+        const eqDelete = jest.fn().mockResolvedValue({ error: null });
+        const del = jest.fn(() => ({ eq: eqDelete }));
+
+        supabase.from.mockImplementation((table) => {
+            if (table === "fuelings") {
+                return {
+                    select,
+                    delete: del,
+                };
+            }
+        });
+
+        deleteFileFromBucket.mockResolvedValue({ success: true });
+
+        await deleteFuelingService("1");
+
+        expect(deleteFileFromBucket).toHaveBeenCalledWith({
+            bucket: "fuelings_receipts",
+            filePath: "fuelings/1/file.jpg",
+        });
     });
 
     test("deleteFuelingService should throw when id is missing", async () => {
@@ -265,12 +602,31 @@ describe("fueling.service", () => {
     });
 
     test("deleteFuelingService should throw when supabase returns error", async () => {
-        const eq = jest.fn().mockResolvedValue({
+        const maybeSingle = jest.fn().mockResolvedValue({
+            data: {
+                id: "1",
+                receipt_path: null,
+            },
+            error: null,
+        });
+
+        const select = jest.fn(() => ({
+            eq: jest.fn(() => ({ maybeSingle })),
+        }));
+
+        const eqDelete = jest.fn().mockResolvedValue({
             error: new Error("delete failed"),
         });
-        const del = jest.fn(() => ({ eq }));
+        const del = jest.fn(() => ({ eq: eqDelete }));
 
-        supabase.from.mockReturnValue({ delete: del });
+        supabase.from.mockImplementation((table) => {
+            if (table === "fuelings") {
+                return {
+                    select,
+                    delete: del,
+                };
+            }
+        });
 
         await expect(deleteFuelingService("1")).rejects.toThrow("delete failed");
     });

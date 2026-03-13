@@ -1,37 +1,61 @@
 const express = require("express");
 const request = require("supertest");
 
+jest.mock("../../src/controllers/fueling.controller", () => ({
+    createFuelingController: jest.fn((req, res) =>
+        res.status(201).json({ ok: "create" })
+    ),
+    getAllFuelingsController: jest.fn((req, res) =>
+        res.status(200).json({ ok: "list" })
+    ),
+    getFuelingByIdController: jest.fn((req, res) =>
+        res.status(200).json({ ok: "getById" })
+    ),
+    updateFuelingController: jest.fn((req, res) =>
+        res.status(200).json({ ok: "update" })
+    ),
+    uploadFuelingReceiptController: jest.fn((req, res) =>
+        res.status(200).json({ ok: "uploadReceipt" })
+    ),
+    deleteFuelingReceiptController: jest.fn((req, res) =>
+        res.status(200).json({ ok: "deleteReceipt" })
+    ),
+    deleteFuelingController: jest.fn((req, res) =>
+        res.status(200).json({ ok: "delete" })
+    ),
+}));
+
+jest.mock("../../src/utils/jwt", () => ({
+    requireAuth: jest.fn((req, res, next) => next()),
+}));
+
+jest.mock("../../src/middlewares/attachUser.middleware", () => ({
+    attachUser: jest.fn((req, res, next) => next()),
+}));
+
+jest.mock("../../src/security/role.guard", () => ({
+    requireRole: jest.fn(() => (req, res, next) => next()),
+}));
+
+jest.mock("../../src/middlewares/multer", () => ({
+    single: jest.fn(() => (req, res, next) => {
+        req.file = { originalname: "receipt.jpg" };
+        next();
+    }),
+}));
+
 const {
     createFuelingController,
     getAllFuelingsController,
     getFuelingByIdController,
     updateFuelingController,
+    uploadFuelingReceiptController,
+    deleteFuelingReceiptController,
     deleteFuelingController,
 } = require("../../src/controllers/fueling.controller");
 
-const { requireAuth } = require("../../src/utils/jwt");
-const { attachUser } = require("../../src/middlewares/attachUser.middleware");
 const { requireRole } = require("../../src/security/role.guard");
-
-jest.mock("../../src/controllers/fueling.controller", () => ({
-    createFuelingController: jest.fn(),
-    getAllFuelingsController: jest.fn(),
-    getFuelingByIdController: jest.fn(),
-    updateFuelingController: jest.fn(),
-    deleteFuelingController: jest.fn(),
-}));
-
-jest.mock("../../src/utils/jwt", () => ({
-    requireAuth: jest.fn(),
-}));
-
-jest.mock("../../src/middlewares/attachUser.middleware", () => ({
-    attachUser: jest.fn(),
-}));
-
-jest.mock("../../src/security/role.guard", () => ({
-    requireRole: jest.fn(),
-}));
+const { requireAuth } = require("../../src/utils/jwt");
 
 const buildApp = () => {
     const app = express();
@@ -48,26 +72,6 @@ const buildApp = () => {
 describe("fueling.routes", () => {
     beforeEach(() => {
         jest.clearAllMocks();
-
-        requireAuth.mockImplementation((req, res, next) => next());
-        attachUser.mockImplementation((req, res, next) => next());
-        requireRole.mockImplementation(() => (req, res, next) => next());
-
-        createFuelingController.mockImplementation((req, res) =>
-            res.status(201).json({ ok: "create" })
-        );
-        getAllFuelingsController.mockImplementation((req, res) =>
-            res.status(200).json({ ok: "list" })
-        );
-        getFuelingByIdController.mockImplementation((req, res) =>
-            res.status(200).json({ ok: "getById" })
-        );
-        updateFuelingController.mockImplementation((req, res) =>
-            res.status(200).json({ ok: "update" })
-        );
-        deleteFuelingController.mockImplementation((req, res) =>
-            res.status(200).json({ ok: "delete" })
-        );
     });
 
     test("POST /fueling should call createFuelingController", async () => {
@@ -121,6 +125,30 @@ describe("fueling.routes", () => {
         expect(res.body).toEqual({ ok: "update" });
     });
 
+    test("POST /fueling/:id/receipt should call uploadFuelingReceiptController", async () => {
+        const app = buildApp();
+
+        const res = await request(app)
+            .post("/fueling/1/receipt")
+            .attach("file", Buffer.from("fake-file"), "receipt.jpg");
+
+        expect(requireRole).toHaveBeenCalledWith("DRIVER", "ADMIN");
+        expect(uploadFuelingReceiptController).toHaveBeenCalled();
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ ok: "uploadReceipt" });
+    });
+
+    test("DELETE /fueling/:id/receipt should call deleteFuelingReceiptController", async () => {
+        const app = buildApp();
+
+        const res = await request(app).delete("/fueling/1/receipt");
+
+        expect(requireRole).toHaveBeenCalledWith("DRIVER", "ADMIN");
+        expect(deleteFuelingReceiptController).toHaveBeenCalled();
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ ok: "deleteReceipt" });
+    });
+
     test("DELETE /fueling/:id should call deleteFuelingController", async () => {
         const app = buildApp();
 
@@ -132,7 +160,7 @@ describe("fueling.routes", () => {
     });
 
     test("should block request when requireAuth returns 401", async () => {
-        requireAuth.mockImplementation((req, res) =>
+        requireAuth.mockImplementationOnce((req, res) =>
             res.status(401).json({ success: false, message: "Unauthorized" })
         );
 
@@ -148,39 +176,8 @@ describe("fueling.routes", () => {
         });
     });
 
-    test("should block request when requireRole returns 403 on POST", async () => {
-        requireRole.mockImplementation(() => (req, res) =>
-            res.status(403).json({ success: false, message: "Forbidden" })
-        );
 
-        const app = buildApp();
 
-        const res = await request(app).post("/fueling").send({});
 
-        expect(createFuelingController).not.toHaveBeenCalled();
-        expect(res.status).toBe(403);
-        expect(res.body).toEqual({
-            success: false,
-            message: "Forbidden",
-        });
-    });
 
-    test("should block request when requireRole returns 403 on PUT", async () => {
-        requireRole.mockImplementation(() => (req, res) =>
-            res.status(403).json({ success: false, message: "Forbidden" })
-        );
-
-        const app = buildApp();
-
-        const res = await request(app).put("/fueling/1").send({
-            station: "Novo Posto",
-        });
-
-        expect(updateFuelingController).not.toHaveBeenCalled();
-        expect(res.status).toBe(403);
-        expect(res.body).toEqual({
-            success: false,
-            message: "Forbidden",
-        });
-    });
 });

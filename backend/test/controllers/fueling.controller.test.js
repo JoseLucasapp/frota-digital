@@ -1,20 +1,24 @@
-const {
-    createFuelingController,
-    getAllFuelingsController,
-    getFuelingByIdController,
-    updateFuelingController,
-    deleteFuelingController,
-} = require("../../src/controllers/fueling.controller");
-
-const fuelingService = require("../../src/services/fueling.service");
-
 jest.mock("../../src/services/fueling.service", () => ({
     createFuelingService: jest.fn(),
     getAllFuelingsService: jest.fn(),
     getFuelingByIdService: jest.fn(),
     updateFuelingService: jest.fn(),
+    uploadFuelingReceiptService: jest.fn(),
+    deleteFuelingReceiptService: jest.fn(),
     deleteFuelingService: jest.fn(),
 }));
+
+const fuelingService = require("../../src/services/fueling.service");
+
+const {
+    createFuelingController,
+    getAllFuelingsController,
+    getFuelingByIdController,
+    updateFuelingController,
+    uploadFuelingReceiptController,
+    deleteFuelingReceiptController,
+    deleteFuelingController,
+} = require("../../src/controllers/fueling.controller");
 
 const mockRes = () => {
     const res = {};
@@ -241,6 +245,176 @@ describe("fueling.controller", () => {
             expect(res.json).toHaveBeenCalledWith({
                 success: false,
                 message: "db error",
+            });
+        });
+    });
+
+    describe("uploadFuelingReceiptController", () => {
+        test("should return 400 when file is missing", async () => {
+            const req = {
+                params: { id: "1" },
+                file: null,
+            };
+            const res = mockRes();
+
+            await uploadFuelingReceiptController(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(res.json).toHaveBeenCalledWith({
+                success: false,
+                message: "file is required",
+            });
+        });
+
+        test("should return 200 when upload succeeds", async () => {
+            fuelingService.uploadFuelingReceiptService.mockResolvedValue({
+                fueling: { id: "1" },
+                file: { publicUrl: "https://file-url.com/receipt.jpg" },
+            });
+
+            const req = {
+                params: { id: "1" },
+                file: { originalname: "receipt.jpg" },
+            };
+            const res = mockRes();
+
+            await uploadFuelingReceiptController(req, res);
+
+            expect(fuelingService.uploadFuelingReceiptService).toHaveBeenCalledWith({
+                fuelingId: "1",
+                file: req.file,
+            });
+
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                message: "Receipt uploaded successfully",
+                data: {
+                    fueling: { id: "1" },
+                    file: { publicUrl: "https://file-url.com/receipt.jpg" },
+                },
+            });
+        });
+
+        test("should return 404 when fueling is not found", async () => {
+            fuelingService.uploadFuelingReceiptService.mockRejectedValue(
+                new Error("Fueling not found")
+            );
+
+            const req = {
+                params: { id: "1" },
+                file: { originalname: "receipt.jpg" },
+            };
+            const res = mockRes();
+
+            await uploadFuelingReceiptController(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(404);
+            expect(res.json).toHaveBeenCalledWith({
+                success: false,
+                message: "Fueling not found",
+            });
+        });
+
+        test("should return 500 when upload service throws generic error", async () => {
+            fuelingService.uploadFuelingReceiptService.mockRejectedValue(
+                new Error("upload failed")
+            );
+
+            const req = {
+                params: { id: "1" },
+                file: { originalname: "receipt.jpg" },
+            };
+            const res = mockRes();
+
+            await uploadFuelingReceiptController(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(500);
+            expect(res.json).toHaveBeenCalledWith({
+                success: false,
+                message: "upload failed",
+            });
+        });
+    });
+
+    describe("deleteFuelingReceiptController", () => {
+        test("should return 200 when delete succeeds", async () => {
+            fuelingService.deleteFuelingReceiptService.mockResolvedValue({
+                fueling: { id: "1" },
+            });
+
+            const req = {
+                params: { id: "1" },
+            };
+            const res = mockRes();
+
+            await deleteFuelingReceiptController(req, res);
+
+            expect(fuelingService.deleteFuelingReceiptService).toHaveBeenCalledWith("1");
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                message: "Receipt deleted successfully",
+                data: {
+                    fueling: { id: "1" },
+                },
+            });
+        });
+
+        test("should return 404 when receipt is not found", async () => {
+            fuelingService.deleteFuelingReceiptService.mockRejectedValue(
+                new Error("receipt not found")
+            );
+
+            const req = {
+                params: { id: "1" },
+            };
+            const res = mockRes();
+
+            await deleteFuelingReceiptController(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(404);
+            expect(res.json).toHaveBeenCalledWith({
+                success: false,
+                message: "receipt not found",
+            });
+        });
+
+        test("should return 404 when fueling is not found", async () => {
+            fuelingService.deleteFuelingReceiptService.mockRejectedValue(
+                new Error("Fueling not found")
+            );
+
+            const req = {
+                params: { id: "1" },
+            };
+            const res = mockRes();
+
+            await deleteFuelingReceiptController(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(404);
+            expect(res.json).toHaveBeenCalledWith({
+                success: false,
+                message: "Fueling not found",
+            });
+        });
+
+        test("should return 500 when delete receipt service throws generic error", async () => {
+            fuelingService.deleteFuelingReceiptService.mockRejectedValue(
+                new Error("delete receipt failed")
+            );
+
+            const req = {
+                params: { id: "1" },
+            };
+            const res = mockRes();
+
+            await deleteFuelingReceiptController(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(500);
+            expect(res.json).toHaveBeenCalledWith({
+                success: false,
+                message: "delete receipt failed",
             });
         });
     });
