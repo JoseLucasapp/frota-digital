@@ -24,9 +24,6 @@ module.exports = (router) => {
    *               email:
    *                 type: string
    *                 example: jose@email.com
-   *               password:
-   *                 type: string
-   *                 example: 123456
    *               phone:
    *                 type: string
    *                 example: 83999998888

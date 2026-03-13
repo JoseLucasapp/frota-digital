@@ -1,4 +1,7 @@
-const { createAdminController, getAllAdminsController } = require('../controllers/admin.controller')
+const { createAdminController, getAllAdminsController } = require('../controllers/admin.controller');
+const { attachUser } = require('../middlewares/attachUser.middleware');
+const { requireRole } = require('../security/role.guard');
+const { requireAuth } = require('../utils/jwt');
 
 module.exports = (router) => {
   /**
@@ -85,6 +88,9 @@ module.exports = (router) => {
    */
   router.get(
     "/admin",
+    requireAuth,
+    attachUser,
+    requireRole("ADMIN"),
     async (req, res) => await getAllAdminsController(req, res),
   );
 
