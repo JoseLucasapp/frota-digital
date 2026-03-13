@@ -39,17 +39,13 @@ async function loginService({ email, password }) {
   let foundUser = null;
   let userRole = null;
 
-  console.log(TABLES)
-
   for (const item of TABLES) {
-    console.log(item)
     const { data, error } = await supabase
       .from(item.table)
       .select("*")
       .eq("email", email)
       .maybeSingle();
 
-    console.log(data)
 
     if (error) throw error;
 
@@ -59,8 +55,6 @@ async function loginService({ email, password }) {
       break;
     }
   }
-
-  console.log(email, password, foundUser)
 
   if (!foundUser) {
     const err = new Error("Invalid credentials");
