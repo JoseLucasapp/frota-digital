@@ -62,7 +62,6 @@ async function loginService({ email, password }) {
     throw err;
   }
 
-  console.log(foundUser, password)
   const validPassword = await verifyPassword(password, foundUser.password_hash);
 
   if (!validPassword) {

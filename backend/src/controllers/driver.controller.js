@@ -7,7 +7,6 @@ const createDriverController = async (req, res) => {
     if (
       !data.name ||
       !data.email ||
-      !data.password ||
       !data.phone ||
       !data.cpf
     ) {
@@ -15,7 +14,7 @@ const createDriverController = async (req, res) => {
         .status(400)
         .json({
           success: false,
-          message: "Name, email, phone, password and cnpj are required",
+          message: "Name, email, phone, password and cpf are required",
         });
     }
 
