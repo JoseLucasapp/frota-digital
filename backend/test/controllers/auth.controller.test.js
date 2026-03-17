@@ -1,155 +1,128 @@
-const express = require("express");
-const request = require("supertest");
+jest.mock("../../src/services/auth.service.js", () => ({
+    loginService: jest.fn(),
+}));
 
+const { loginService } = require("../../src/services/auth.service.js");
 const { loginController } = require("../../src/controllers/auth.controller");
-const { requireAuth } = require("../../src/utils/jwt");
-const { attachUser } = require("../../src/middlewares/attachUser.middleware");
-const { requireRole } = require("../../src/security/role.guard");
 
-jest.mock("../../src/controllers/auth.controller", () => ({
-    loginController: jest.fn(),
-}));
-
-jest.mock("../../src/utils/jwt", () => ({
-    requireSupabaseAuth: jest.fn(),
-    requireAuth: jest.fn(),
-}));
-
-jest.mock("../../src/middlewares/attachUser.middleware", () => ({
-    attachUser: jest.fn(),
-}));
-
-jest.mock("../../src/security/role.guard", () => ({
-    requireRole: jest.fn(),
-}));
-
-const buildApp = () => {
-    const app = express();
-    app.use(express.json());
-
-    const router = express.Router();
-    const registerRoutes = require("../../src/routes/auth.routes");
-    registerRoutes(router);
-    app.use(router);
-
-    return app;
+const mockRes = () => {
+    const res = {};
+    res.status = jest.fn().mockReturnValue(res);
+    res.json = jest.fn().mockReturnValue(res);
+    return res;
 };
 
-describe("auth.routes", () => {
+describe("auth.controller", () => {
     beforeEach(() => {
         jest.clearAllMocks();
+    });
 
-        requireAuth.mockImplementation((req, res, next) => {
-            req.user = {
-                id: "1",
-                role: "ADMIN",
-                profile: { id: "1" },
+    describe("loginController", () => {
+        test("should return login result when credentials are valid", async () => {
+            loginService.mockResolvedValue({
+                success: true,
+                token: "fake-jwt-token",
+                user: {
+                    id: "1",
+                    email: "user@email.com",
+                },
+            });
+
+            const req = {
+                body: {
+                    email: "user@email.com",
+                    password: "123456",
+                },
             };
-            next();
+            const res = mockRes();
+
+            await loginController(req, res);
+
+            expect(loginService).toHaveBeenCalledWith({
+                email: "user@email.com",
+                password: "123456",
+            });
+
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+                token: "fake-jwt-token",
+                user: {
+                    id: "1",
+                    email: "user@email.com",
+                },
+            });
+
+            expect(res.status).not.toHaveBeenCalled();
         });
 
-        attachUser.mockImplementation((req, res, next) => next());
-        requireRole.mockImplementation(() => (req, res, next) => next());
+        test("should return error status and message when service throws known error", async () => {
+            const error = new Error("Invalid credentials");
+            error.statusCode = 401;
 
-        loginController.mockImplementation((req, res) =>
-            res.status(200).json({ token: "fake-token" })
-        );
-    });
+            loginService.mockRejectedValue(error);
 
-    test("POST /login should call loginController", async () => {
-        const app = buildApp();
-
-        const res = await request(app).post("/login").send({
-            email: "admin@email.com",
-            password: "123456",
-        });
-
-        expect(loginController).toHaveBeenCalled();
-        expect(res.status).toBe(200);
-        expect(res.body).toEqual({ token: "fake-token" });
-    });
-
-    test("GET /me should return current user", async () => {
-        const app = buildApp();
-
-        const res = await request(app).get("/me");
-
-        expect(requireAuth).toHaveBeenCalled();
-        expect(attachUser).toHaveBeenCalled();
-        expect(res.status).toBe(200);
-        expect(res.body).toEqual({
-            user: {
-                id: "1",
-                role: "ADMIN",
-                profile: { id: "1" },
-            },
-        });
-    });
-
-    test("GET /admin/stats should allow ADMIN", async () => {
-        const app = buildApp();
-
-        const res = await request(app).get("/admin/stats");
-
-        expect(requireRole).toHaveBeenCalledWith("ADMIN");
-        expect(res.status).toBe(200);
-        expect(res.body).toEqual({
-            ok: true,
-            adminId: "1",
-        });
-    });
-
-    test("GET /jobs should allow DRIVER and MECHANIC roles", async () => {
-        requireAuth.mockImplementation((req, res, next) => {
-            req.user = {
-                id: "2",
-                role: "DRIVER",
-                profile: { id: "2" },
+            const req = {
+                body: {
+                    email: "user@email.com",
+                    password: "wrong-password",
+                },
             };
-            next();
+            const res = mockRes();
+
+            await loginController(req, res);
+
+            expect(loginService).toHaveBeenCalledWith({
+                email: "user@email.com",
+                password: "wrong-password",
+            });
+
+            expect(res.status).toHaveBeenCalledWith(401);
+            expect(res.json).toHaveBeenCalledWith({
+                success: false,
+                message: "Invalid credentials",
+            });
         });
 
-        const app = buildApp();
+        test("should return 500 when service throws error without statusCode", async () => {
+            loginService.mockRejectedValue(new Error("Unexpected error"));
 
-        const res = await request(app).get("/jobs");
+            const req = {
+                body: {
+                    email: "user@email.com",
+                    password: "123456",
+                },
+            };
+            const res = mockRes();
 
-        expect(requireRole).toHaveBeenCalledWith("DRIVER", "MECHANIC");
-        expect(res.status).toBe(200);
-        expect(res.body).toEqual({
-            ok: true,
-            role: "DRIVER",
+            await loginController(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(500);
+            expect(res.json).toHaveBeenCalledWith({
+                success: false,
+                message: "Unexpected error",
+            });
         });
-    });
 
-    test("should block request when requireAuth returns 401", async () => {
-        requireAuth.mockImplementation((req, res) =>
-            res.status(401).json({ success: false, message: "Unauthorized" })
-        );
+        test("should pass undefined values to service if body is missing fields", async () => {
+            loginService.mockResolvedValue({
+                success: true,
+            });
 
-        const app = buildApp();
+            const req = {
+                body: {},
+            };
+            const res = mockRes();
 
-        const res = await request(app).get("/me");
+            await loginController(req, res);
 
-        expect(res.status).toBe(401);
-        expect(res.body).toEqual({
-            success: false,
-            message: "Unauthorized",
-        });
-    });
+            expect(loginService).toHaveBeenCalledWith({
+                email: undefined,
+                password: undefined,
+            });
 
-    test("should block admin route when requireRole returns 403", async () => {
-        requireRole.mockImplementation(() => (req, res) =>
-            res.status(403).json({ success: false, message: "Forbidden" })
-        );
-
-        const app = buildApp();
-
-        const res = await request(app).get("/admin/stats");
-
-        expect(res.status).toBe(403);
-        expect(res.body).toEqual({
-            success: false,
-            message: "Forbidden",
+            expect(res.json).toHaveBeenCalledWith({
+                success: true,
+            });
         });
     });
 });
