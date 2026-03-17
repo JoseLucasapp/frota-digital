@@ -9,6 +9,7 @@ module.exports = {
         "!src/security/**",
         "!src/server.js",
         "!src/app.js",
+        "!src/routes/index.js"
     ],
     coverageDirectory: "coverage",
     coverageReporters: ["text", "lcov", "html"],

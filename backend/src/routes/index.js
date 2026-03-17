@@ -5,11 +5,9 @@ const fuelingsRoutes = require("./fuelings.routes")
 const loansRoutes = require("./loans.routes")
 const mechanicRoutes = require("./mechanic.routes")
 const notificationsRoutes = require("./notifications.routes")
-const testUpload = require("./testUpload.routes")
 const vehicleRoutes = require("./vehicle.routes")
 
 module.exports = (router) => {
-    testUpload(router)
     authRoutes(router)
     adminRoutes(router)
     mechanicRoutes(router)
