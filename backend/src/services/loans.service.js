@@ -25,10 +25,10 @@ const getAllLoansService = async (query = {}) => {
     if (query.vehicle_id) {
         request = request.eq("vehicle_id", query.vehicle_id);
     }
-    if (query.drive_id) {
-        request = request.eq("drive_id", query.drive_id);
+    if (query.driver_id) {
+        request = request.eq("driver_id", query.driver_id);
     }
-        request = request.order("created_at", { ascending: sortOrder });
+    request = request.order("created_at", { ascending: sortOrder });
     request = request.range(from, to);
 
     const { data, error, count } = await request;
@@ -47,7 +47,7 @@ const getAllLoansService = async (query = {}) => {
         },
     };
 
-    
+
 };
 
 const getLoanByIdService = async (id) => {

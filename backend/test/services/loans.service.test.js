@@ -76,7 +76,7 @@ describe("loans.service", () => {
 
         const result = await getAllLoansService({
             vehicle_id: "veh-1",
-            drive_id: "drv-1",
+            driver_id: "drv-1",
             page: "2",
             limit: "5",
             sortOrder: "asc",
@@ -85,7 +85,7 @@ describe("loans.service", () => {
         expect(supabase.from).toHaveBeenCalledWith("loans");
         expect(builder.select).toHaveBeenCalledWith("*", { count: "exact" });
         expect(builder.eq).toHaveBeenCalledWith("vehicle_id", "veh-1");
-        expect(builder.eq).toHaveBeenCalledWith("drive_id", "drv-1");
+        expect(builder.eq).toHaveBeenCalledWith("driver_id", "drv-1");
         expect(builder.order).toHaveBeenCalledWith("created_at", { ascending: true });
         expect(builder.range).toHaveBeenCalledWith(5, 9);
 
