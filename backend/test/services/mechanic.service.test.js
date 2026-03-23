@@ -76,7 +76,7 @@ describe("mechanic.service", () => {
 
             expect(result).toEqual({
                 success: true,
-                message: { id: "1", name: "José", status: MECHANIC_STATUS.ACTIVE },
+                data: { id: "1", name: "José", status: MECHANIC_STATUS.ACTIVE },
             });
         });
 

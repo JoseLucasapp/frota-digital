@@ -41,7 +41,7 @@ const createMechanicService = async (data) => {
 
   sendEmail(data.email, "Conta mecânico cadastrada");
 
-  return { success: true, message: result };
+  return { success: true, data: result };
 };
 
 const getAllMechanicsService = async (query = {}) => {
