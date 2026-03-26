@@ -1,52 +1,94 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Users, Search, Plus, AlertTriangle, X } from "lucide-react";
-import { drivers } from "@/lib/mockData";
+import { Users, Search, Plus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import CreateModal from "@/components/CreateModal";
-import ActionMenu from "@/components/ActionMenu";
-import { toast } from "@/hooks/use-toast";
+import { api, ApiError } from "@/lib/api";
 
-const statusMap = {
-  active: { label: "Ativo", className: "bg-success/20 text-success border-0" },
-  inactive: { label: "Inativo", className: "bg-muted text-muted-foreground border-0" },
-  suspended: { label: "Suspenso", className: "bg-destructive/20 text-destructive border-0" },
+const statusMap: Record<string, string> = {
+  active: "bg-success/20 text-success border-0",
+  inactive: "bg-muted text-muted-foreground border-0",
+  suspended: "bg-destructive/20 text-destructive border-0",
 };
 
-const driverFields = [
-  { label: "Nome Completo", placeholder: "Nome do motorista" },
-  { label: "CPF", placeholder: "000.000.000-00" },
-  { label: "Email", placeholder: "email@exemplo.com" },
-  { label: "Telefone", placeholder: "(00) 00000-0000" },
-  { label: "Categoria CNH", placeholder: "B, C, D ou E" },
-  { label: "Validade CNH", placeholder: "2025-12-31", type: "date" },
-];
+const initialForm = { name: '', cpf: '', email: '', phone: '', cnh_category: '', cnh_valid_until: '', password: '' };
 
 const AdminDrivers = () => {
-  const [search, setSearch] = useState("");
-  const [showModal, setShowModal] = useState(false);
-  const [editModal, setEditModal] = useState<string | null>(null);
+  const [drivers, setDrivers] = useState<any[]>([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editDriver, setEditDriver] = useState<any | null>(null);
+  const [form, setForm] = useState(initialForm);
+  const [saving, setSaving] = useState(false);
 
-  const filtered = drivers.filter(
-    (d) => d.name.toLowerCase().includes(search.toLowerCase()) || d.cpf.includes(search)
-  );
-
-  const isExpiringSoon = (date: string) => {
-    const diff = new Date(date).getTime() - Date.now();
-    return diff < 60 * 24 * 60 * 60 * 1000;
+  const loadDrivers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await api.get<{ data: any[] }>("/driver", { limit: 200 });
+      setDrivers(response.data || []);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Erro ao carregar motoristas');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const editDriver = drivers.find((d) => d.id === editModal);
+  useEffect(() => { loadDrivers(); }, []);
 
-  const getActions = (d: typeof drivers[0]) => [
-    { label: "Editar motorista", onClick: () => setEditModal(d.id) },
-    { label: d.status === "suspended" ? "Reativar" : "Suspender", onClick: () => toast({ title: d.status === "suspended" ? "Motorista reativado" : "Motorista suspenso", description: d.name }) },
-    { label: "Excluir motorista", onClick: () => toast({ title: "Motorista excluído", description: d.name }), destructive: true },
-  ];
+  const filtered = useMemo(() => drivers.filter((driver) => {
+    const term = search.toLowerCase();
+    return !term || String(driver.name || '').toLowerCase().includes(term) || String(driver.cpf || '').includes(term) || String(driver.email || '').toLowerCase().includes(term);
+  }), [drivers, search]);
+
+  const openCreate = () => { setEditDriver(null); setForm(initialForm); setModalOpen(true); };
+  const openEdit = (driver: any) => {
+    setEditDriver(driver);
+    setForm({
+      name: driver.name || '',
+      cpf: driver.cpf || '',
+      email: driver.email || '',
+      phone: driver.phone || '',
+      cnh_category: driver.cnh_category || '',
+      cnh_valid_until: driver.cnh_valid_until ? String(driver.cnh_valid_until).slice(0, 10) : '',
+      password: '',
+    });
+    setModalOpen(true);
+  };
+
+  const submit = async () => {
+    try {
+      setSaving(true);
+      setError(null);
+      if (editDriver) {
+        const payload = { ...form } as any;
+        if (!payload.password) delete payload.password;
+        await api.put(`/driver/${editDriver.id}`, payload);
+      } else {
+        await api.post('/driver', form);
+      }
+      setModalOpen(false);
+      setForm(initialForm);
+      await loadDrivers();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Erro ao salvar motorista');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeDriver = async (id: string) => {
+    try {
+      await api.delete(`/driver/${id}`);
+      await loadDrivers();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Erro ao excluir motorista');
+    }
+  };
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
@@ -55,119 +97,82 @@ const AdminDrivers = () => {
           <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Motoristas</h1>
           <p className="text-muted-foreground text-lg">{drivers.length} motoristas cadastrados</p>
         </div>
-        <Button onClick={() => setShowModal(true)} className="gradient-primary text-primary-foreground h-12 px-6 text-base gap-2">
-          <Plus className="w-5 h-5" /> Novo Motorista
-        </Button>
+        <Button onClick={openCreate} className="gradient-primary text-primary-foreground h-12 px-6 text-base gap-2"><Plus className="w-5 h-5" /> Novo motorista</Button>
       </div>
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-        <Input placeholder="Buscar por nome ou CPF..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10 h-12 text-base bg-secondary border-border" />
+        <Input placeholder="Buscar por nome, CPF ou email..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10 h-12 text-base bg-secondary border-border" />
       </div>
 
-      <div className="hidden md:block glass-card">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Motorista</th>
-              <th className="text-left p-4 text-sm font-semibold text-muted-foreground">CPF</th>
-              <th className="text-left p-4 text-sm font-semibold text-muted-foreground">CNH</th>
-              <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Telefone</th>
-              <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Status</th>
-              <th className="p-4"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((d) => (
-              <tr key={d.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
-                <td className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center text-sm font-bold text-primary-foreground">
-                      {d.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
-                    </div>
-                    <div>
-                      <p className="font-medium text-foreground">{d.name}</p>
-                      <p className="text-sm text-muted-foreground">{d.email}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="p-4 font-mono text-foreground">{d.cpf}</td>
-                <td className="p-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-foreground">Cat. {d.cnhCategory}</span>
-                    {isExpiringSoon(d.cnhExpiry) && <AlertTriangle className="w-4 h-4 text-warning" />}
-                  </div>
-                  <p className="text-sm text-muted-foreground">Venc: {new Date(d.cnhExpiry).toLocaleDateString("pt-BR")}</p>
-                </td>
-                <td className="p-4 text-foreground">{d.phone}</td>
-                <td className="p-4"><Badge className={statusMap[d.status].className}>{statusMap[d.status].label}</Badge></td>
-                <td className="p-4"><ActionMenu items={getActions(d)} /></td>
+      {error ? <div className="glass-card p-4 text-sm text-destructive">{error}</div> : null}
+      {loading ? <div className="glass-card p-4 text-sm text-muted-foreground">Carregando motoristas...</div> : null}
+
+      {!loading && (
+        <div className="glass-card overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Nome</th>
+                <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Contato</th>
+                <th className="text-left p-4 text-sm font-semibold text-muted-foreground">CNH</th>
+                <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Status</th>
+                <th className="text-right p-4 text-sm font-semibold text-muted-foreground">Ações</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {filtered.map((driver) => (
+                <tr key={driver.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
+                  <td className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center"><Users className="w-5 h-5 text-primary" /></div>
+                      <div>
+                        <p className="font-medium text-foreground">{driver.name}</p>
+                        <p className="text-sm text-muted-foreground">CPF: {driver.cpf || '—'}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="p-4 text-foreground">{driver.email}<br /><span className="text-sm text-muted-foreground">{driver.phone || '—'}</span></td>
+                  <td className="p-4 text-foreground">{driver.cnh_category || '—'}<br /><span className="text-sm text-muted-foreground">{driver.cnh_valid_until ? new Date(driver.cnh_valid_until).toLocaleDateString('pt-BR') : 'Sem validade'}</span></td>
+                  <td className="p-4"><Badge className={statusMap[String(driver.status).toLowerCase()] || 'border-0'}>{driver.status || '—'}</Badge></td>
+                  <td className="p-4 text-right space-x-2">
+                    <Button variant="outline" onClick={() => openEdit(driver)}>Editar</Button>
+                    <Button variant="destructive" onClick={() => removeDriver(driver.id)}>Excluir</Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!filtered.length ? <div className="p-4 text-sm text-muted-foreground">Nenhum motorista encontrado.</div> : null}
+        </div>
+      )}
 
-      <div className="md:hidden space-y-3">
-        {filtered.map((d) => (
-          <div key={d.id} className="glass-card p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center text-sm font-bold text-primary-foreground">
-                  {d.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
-                </div>
-                <div>
-                  <p className="font-semibold text-foreground">{d.name}</p>
-                  <p className="text-sm text-muted-foreground">{d.phone}</p>
-                </div>
-              </div>
-              <ActionMenu items={getActions(d)} />
-            </div>
+      {modalOpen && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setModalOpen(false)}>
+          <div className="glass-card w-full max-w-2xl p-6 space-y-5" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <div className="grid grid-cols-2 gap-2 text-sm flex-1">
-                <div><span className="text-muted-foreground">CNH: </span><span className="text-foreground">Cat. {d.cnhCategory}</span></div>
-                <div className="flex items-center gap-1">
-                  <span className="text-muted-foreground">Venc: </span>
-                  <span className="text-foreground">{new Date(d.cnhExpiry).toLocaleDateString("pt-BR")}</span>
-                  {isExpiringSoon(d.cnhExpiry) && <AlertTriangle className="w-3 h-3 text-warning" />}
+              <h2 className="text-xl font-bold text-foreground">{editDriver ? 'Editar motorista' : 'Novo motorista'}</h2>
+              <button onClick={() => setModalOpen(false)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              {[
+                ['Nome', 'name'],
+                ['CPF', 'cpf'],
+                ['Email', 'email'],
+                ['Telefone', 'phone'],
+                ['Categoria CNH', 'cnh_category'],
+              ].map(([label, key]) => (
+                <div key={key} className="space-y-2">
+                  <Label>{label}</Label>
+                  <Input value={(form as any)[key]} onChange={(e) => setForm((current) => ({ ...current, [key]: e.target.value }))} className="h-12 bg-secondary border-border" />
                 </div>
-              </div>
-              <Badge className={statusMap[d.status].className}>{statusMap[d.status].label}</Badge>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {showModal && <CreateModal title="Novo Motorista" fields={driverFields} onClose={() => setShowModal(false)} successMessage="Motorista cadastrado!" />}
-
-      {/* Edit Driver Modal */}
-      {editDriver && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setEditModal(null)}>
-          <div className="glass-card w-full max-w-lg p-6 space-y-5" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-foreground">Editar Motorista</h2>
-              <button onClick={() => setEditModal(null)} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="space-y-2"><Label className="text-base">Nome</Label><Input defaultValue={editDriver.name} className="h-12 text-base bg-secondary border-border" /></div>
-              <div className="space-y-2"><Label className="text-base">CPF</Label><Input defaultValue={editDriver.cpf} className="h-12 text-base bg-secondary border-border" /></div>
-              <div className="space-y-2"><Label className="text-base">Email</Label><Input defaultValue={editDriver.email} className="h-12 text-base bg-secondary border-border" /></div>
-              <div className="space-y-2"><Label className="text-base">Telefone</Label><Input defaultValue={editDriver.phone} className="h-12 text-base bg-secondary border-border" /></div>
-              <div className="space-y-2"><Label className="text-base">Categoria CNH</Label><Input defaultValue={editDriver.cnhCategory} className="h-12 text-base bg-secondary border-border" /></div>
-              <div className="space-y-2"><Label className="text-base">Validade CNH</Label><Input defaultValue={editDriver.cnhExpiry} type="date" className="h-12 text-base bg-secondary border-border" /></div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label className="text-base">Status</Label>
-                <Select defaultValue={editDriver.status}>
-                  <SelectTrigger className="h-12 text-base bg-secondary border-border"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Ativo</SelectItem>
-                    <SelectItem value="inactive">Inativo</SelectItem>
-                    <SelectItem value="suspended">Suspenso</SelectItem>
-                  </SelectContent>
-                </Select>
+              ))}
+              <div className="space-y-2">
+                <Label>Validade CNH</Label>
+                <Input type="date" value={form.cnh_valid_until} onChange={(e) => setForm((current) => ({ ...current, cnh_valid_until: e.target.value }))} className="h-12 bg-secondary border-border" />
               </div>
             </div>
-            <Button onClick={() => { toast({ title: "Motorista atualizado!" }); setEditModal(null); }} className="w-full h-12 text-base gradient-primary text-primary-foreground">Salvar</Button>
+            <Button disabled={saving} onClick={submit} className="w-full h-12 text-base gradient-primary text-primary-foreground">{saving ? 'Salvando...' : 'Salvar'}</Button>
           </div>
         </div>
       )}
