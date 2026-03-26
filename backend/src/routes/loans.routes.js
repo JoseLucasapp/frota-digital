@@ -1,46 +1,46 @@
-const { createLoanController,getAllLoansController,getLoanByIdController,updateLoanController,deleteLoanController } = require("../controllers/loans.controller");
+const { createLoanController, getAllLoansController, getLoanByIdController, updateLoanController, deleteLoanController } = require("../controllers/loans.controller");
 const { attachUser } = require("../middlewares/attachUser.middleware");
 const { requireRole } = require("../security/role.guard");
 const { requireAuth } = require("../utils/jwt");
 
 module.exports = (router) => {
 
-/**
-   * @swagger
-   * /loans:
-   *   post:
-   *     summary: Create a new loan
-   *     tags: [Loans]
-   *     requestBody:
-   *       required: true
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             properties:
-   *               start_date:
-   *                 type: date
-   *                 example: "2023-01-01"
-   *               end_date:
-   *                 type: date
-   *                 example: "2023-12-31"
-   *               reason: 
-   *                 type: string
-   *                 example: reason for the loan
-   *               vehicle_id: 
-   *                 type: string
-   *                 example: 46b69d42-8c88-4fb5-825d-24e27b83f50b
-   *               driver_id: 
-   *                 type: string
-   *                 example: fd468bc3-fc74-4ea7-bda3-18870fb049ef
-   *     responses:
-   *       201:
-   *         description: Success
-   *       400:
-   *         description: Bad Request
-   *       500:
-   *         description: Internal Server Error
-   */
+    /**
+       * @swagger
+       * /loans:
+       *   post:
+       *     summary: Create a new loan
+       *     tags: [Loans]
+       *     requestBody:
+       *       required: true
+       *       content:
+       *         application/json:
+       *           schema:
+       *             type: object
+       *             properties:
+       *               start_date:
+       *                 type: date
+       *                 example: "2023-01-01"
+       *               end_date:
+       *                 type: date
+       *                 example: "2023-12-31"
+       *               reason: 
+       *                 type: string
+       *                 example: reason for the loan
+       *               vehicle_id: 
+       *                 type: string
+       *                 example: 46b69d42-8c88-4fb5-825d-24e27b83f50b
+       *               driver_id: 
+       *                 type: string
+       *                 example: fd468bc3-fc74-4ea7-bda3-18870fb049ef
+       *     responses:
+       *       201:
+       *         description: Success
+       *       400:
+       *         description: Bad Request
+       *       500:
+       *         description: Internal Server Error
+       */
 
     router.post(
         "/loans",
@@ -81,8 +81,7 @@ module.exports = (router) => {
     router.get(
         "/loans",
         requireAuth,
-        attachUser ,
-        requireRole("ADMIN"),
+        attachUser,
         async (req, res) => await getAllLoansController(req, res),
     );
 
@@ -109,7 +108,6 @@ module.exports = (router) => {
         "/loans/:id",
         requireAuth,
         attachUser,
-        requireRole("ADMIN"),
         async (req, res) => await getLoanByIdController(req, res),
     );
 

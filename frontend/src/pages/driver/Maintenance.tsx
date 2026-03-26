@@ -1,86 +1,114 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Wrench } from "lucide-react";
+import { api, ApiError } from "@/lib/api";
+import { getAuthUser } from "@/lib/auth";
+import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { ArrowLeft, Wrench, Camera } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "@/hooks/use-toast";
 
-const DriverMaintenance = () => {
+const DriverMaintenancePage = () => {
+  const user = getAuthUser();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    toast({ title: "Problema reportado!", description: "A equipe de manutenção foi notificada." });
-    navigate("/driver");
-  };
+  const [loans, setLoans] = useState<any[]>([]);
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [maintenances, setMaintenances] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setError(null);
+
+        const [loanRes, vehicleRes, maintenanceRes] = await Promise.all([
+          api.get<{ data: any[] }>("/loans", { limit: 200 }),
+          api.get<{ data: any[] }>("/vehicle", { limit: 200 }),
+          api.get<{ data: any[] }>("/maintenances", { limit: 200 }),
+        ]);
+
+        setLoans(loanRes.data || []);
+        setVehicles(vehicleRes.data || []);
+        setMaintenances(maintenanceRes.data || []);
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : "Erro ao carregar manutenções");
+      }
+    };
+
+    load();
+  }, []);
+
+  const currentLoan = useMemo(() => {
+    const ownLoans = loans.filter((loan) => loan.driver_id === user?.id);
+    return ownLoans.sort((a, b) => new Date(b.start_date || 0).getTime() - new Date(a.start_date || 0).getTime())[0];
+  }, [loans, user?.id]);
+
+  const currentVehicle = useMemo(() => {
+    return vehicles.find((vehicle) => vehicle.id === currentLoan?.vehicle_id) || null;
+  }, [vehicles, currentLoan?.vehicle_id]);
+
+  const myMaintenances = useMemo(() => {
+    if (!currentVehicle?.id) return [];
+    return maintenances.filter((item) => item.vehicle_id === currentVehicle.id);
+  }, [maintenances, currentVehicle?.id]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="gradient-primary p-4 flex items-center gap-3">
-        <button onClick={() => navigate("/driver")} className="text-primary-foreground">
-          <ArrowLeft className="w-6 h-6" />
-        </button>
-        <h1 className="text-xl font-bold text-primary-foreground">Reportar Problema</h1>
-      </header>
-
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="p-4 max-w-lg mx-auto">
-        <div className="glass-card p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
-              <Wrench className="w-6 h-6 text-destructive" />
-            </div>
-            <div>
-              <p className="font-bold text-foreground">Toyota Hilux SW4</p>
-              <p className="font-mono text-primary">ABC-1D23</p>
-            </div>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-2">
-              <Label className="text-base">Descrição do Problema</Label>
-              <Textarea placeholder="Descreva o problema com detalhes..." className="min-h-[120px] text-base bg-secondary border-border" />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-base">Prioridade</Label>
-              <Select>
-                <SelectTrigger className="h-12 text-base bg-secondary border-border">
-                  <SelectValue placeholder="Selecione a prioridade" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Baixa — Pode esperar</SelectItem>
-                  <SelectItem value="medium">Média — Precisa de atenção</SelectItem>
-                  <SelectItem value="high">Alta — Urgente</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-base">KM Atual</Label>
-              <Input type="number" placeholder="45.230" className="h-12 text-base bg-secondary border-border" />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-base">Fotos / Anexos</Label>
-              <label className="flex items-center justify-center gap-2 h-20 rounded-xl border-2 border-dashed border-border bg-secondary/50 cursor-pointer hover:border-primary transition-colors">
-                <Camera className="w-6 h-6 text-muted-foreground" />
-                <span className="text-muted-foreground text-base">Tirar foto ou anexar</span>
-                <input type="file" accept="image/*" multiple className="hidden" />
-              </label>
-            </div>
-
-            <Button type="submit" className="w-full h-14 text-lg font-semibold gradient-primary hover:opacity-90 transition-opacity">
-              Enviar Relatório
-            </Button>
-          </form>
+    <div className="min-h-screen bg-background p-4 md:p-8 space-y-6">
+      <div>
+        <div className="flex items-center gap-4 mb-1">
+          <button onClick={() => navigate("/driver")} className="text-primary-foreground">
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <h1 className="text-2xl font-bold text-foreground">Manutenções</h1>
         </div>
-      </motion.div>
+
+        <p className="text-muted-foreground">
+          {currentVehicle ? `Veículo atual: ${currentVehicle.plate}` : "Nenhum veículo associado"}
+        </p>
+      </div>
+
+      {error ? <div className="glass-card p-4 text-sm text-destructive">{error}</div> : null}
+
+      <div className="glass-card p-6 space-y-4">
+        <h2 className="text-lg font-semibold text-foreground">Histórico de manutenção</h2>
+
+        {myMaintenances.map((item) => (
+          <div key={item.id} className="p-4 rounded-xl bg-secondary/40">
+            <div className="flex items-center gap-3 mb-2">
+              <Wrench className="w-5 h-5 text-primary" />
+              <p className="font-medium text-foreground">{item.type || "Manutenção"}</p>
+            </div>
+
+            <p className="text-sm text-muted-foreground">{item.description || "Sem descrição"}</p>
+
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              {item.priority ? <Badge>{item.priority}</Badge> : null}
+              {item.status ? <Badge>{item.status}</Badge> : null}
+            </div>
+
+            {item.estimated_cost ? (
+              <p className="text-sm text-muted-foreground mt-3">
+                Custo estimado: R$ {Number(item.estimated_cost).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </p>
+            ) : null}
+
+            {item.receipt_url ? (
+              <a
+                href={item.receipt_url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-block mt-3 text-sm text-primary hover:underline"
+              >
+                Ver comprovante
+              </a>
+            ) : null}
+          </div>
+        ))}
+
+        {!myMaintenances.length ? (
+          <p className="text-sm text-muted-foreground">Nenhuma manutenção encontrada.</p>
+        ) : null}
+      </div>
     </div>
   );
 };
 
-export default DriverMaintenance;
+export default DriverMaintenancePage;
