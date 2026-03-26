@@ -25,6 +25,7 @@ import MechanicDashboard from "./pages/mechanic/Dashboard";
 import NotFound from "./pages/NotFound";
 import ForgotPassword from "./pages/ForgotPassword";
 import FirstLogin from "./pages/FirstLogin";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -40,25 +41,25 @@ const App = () => (
           <Route path="/admin-login" element={<AdminLogin />} />
           <Route path="/first-login" element={<FirstLogin />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
-          {/* Admin routes */}
-          <Route path="/admin" element={<AdminLayout><AdminDashboard /></AdminLayout>} />
-          <Route path="/admin/vehicles" element={<AdminLayout><AdminVehicles /></AdminLayout>} />
-          <Route path="/admin/drivers" element={<AdminLayout><AdminDrivers /></AdminLayout>} />
-          <Route path="/admin/mechanics" element={<AdminLayout><AdminMechanics /></AdminLayout>} />
-          <Route path="/admin/tracking" element={<AdminLayout><AdminTracking /></AdminLayout>} />
-          <Route path="/admin/fuel" element={<AdminLayout><AdminFuel /></AdminLayout>} />
-          <Route path="/admin/maintenance" element={<AdminLayout><AdminMaintenance /></AdminLayout>} />
-          <Route path="/admin/loans" element={<AdminLayout><AdminLoans /></AdminLayout>} />
-          <Route path="/admin/reports" element={<AdminLayout><AdminReports /></AdminLayout>} />
-          <Route path="/admin/profile" element={<AdminLayout><AdminProfile /></AdminLayout>} />
-          {/* Driver routes */}
-          <Route path="/driver" element={<DriverDashboard />} />
-          <Route path="/driver/fuel" element={<DriverFuelPage />} />
-          <Route path="/driver/maintenance" element={<DriverMaintenancePage />} />
-          <Route path="/driver/documents" element={<DriverDocuments />} />
-          <Route path="/driver/history" element={<DriverHistory />} />
-          {/* Mechanic routes */}
-          <Route path="/mechanic" element={<MechanicDashboard />} />
+
+          <Route path="/admin" element={<ProtectedRoute roles={["ADMIN"]}><AdminLayout><AdminDashboard /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/vehicles" element={<ProtectedRoute roles={["ADMIN"]}><AdminLayout><AdminVehicles /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/drivers" element={<ProtectedRoute roles={["ADMIN"]}><AdminLayout><AdminDrivers /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/mechanics" element={<ProtectedRoute roles={["ADMIN"]}><AdminLayout><AdminMechanics /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/tracking" element={<ProtectedRoute roles={["ADMIN"]}><AdminLayout><AdminTracking /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/fuel" element={<ProtectedRoute roles={["ADMIN"]}><AdminLayout><AdminFuel /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/maintenance" element={<ProtectedRoute roles={["ADMIN"]}><AdminLayout><AdminMaintenance /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/loans" element={<ProtectedRoute roles={["ADMIN"]}><AdminLayout><AdminLoans /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/reports" element={<ProtectedRoute roles={["ADMIN"]}><AdminLayout><AdminReports /></AdminLayout></ProtectedRoute>} />
+          <Route path="/admin/profile" element={<ProtectedRoute roles={["ADMIN"]}><AdminLayout><AdminProfile /></AdminLayout></ProtectedRoute>} />
+
+          <Route path="/driver" element={<ProtectedRoute roles={["DRIVER"]}><DriverDashboard /></ProtectedRoute>} />
+          <Route path="/driver/fuel" element={<ProtectedRoute roles={["DRIVER"]}><DriverFuelPage /></ProtectedRoute>} />
+          <Route path="/driver/maintenance" element={<ProtectedRoute roles={["DRIVER"]}><DriverMaintenancePage /></ProtectedRoute>} />
+          <Route path="/driver/documents" element={<ProtectedRoute roles={["DRIVER"]}><DriverDocuments /></ProtectedRoute>} />
+          <Route path="/driver/history" element={<ProtectedRoute roles={["DRIVER"]}><DriverHistory /></ProtectedRoute>} />
+
+          <Route path="/mechanic" element={<ProtectedRoute roles={["MECHANIC"]}><MechanicDashboard /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
