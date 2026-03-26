@@ -2,14 +2,44 @@ const supabase = require('../config/supabase');
 const { hashPassword } = require('../utils/hash');
 
 const createAdminService = async (data) => {
-    const password_hash = await hashPassword(data.password);
-    data.password_hash = password_hash;
-    delete data.password;
-    const {error} = await supabase.from('admins').insert(data);
-    if (error) {
-        throw error;
-    }
-    return { success: true, message: 'Admin created successfully' };
+  const payload = { ...data };
+  payload.password_hash = await hashPassword(payload.password);
+  delete payload.password;
+
+  const { data: existingEmail, error: emailLookupError } = await supabase
+    .from('admins')
+    .select('id')
+    .eq('email', payload.email)
+    .maybeSingle();
+
+  if (emailLookupError) throw emailLookupError;
+  if (existingEmail) {
+    const error = new Error('Já existe uma instituição cadastrada com este email');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  const { data: existingCnpj, error: cnpjLookupError } = await supabase
+    .from('admins')
+    .select('id')
+    .eq('cnpj', payload.cnpj)
+    .maybeSingle();
+
+  if (cnpjLookupError) throw cnpjLookupError;
+  if (existingCnpj) {
+    const error = new Error('Já existe uma instituição cadastrada com este CNPJ');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  const { data: created, error } = await supabase.from('admins').insert(payload).select('*').single();
+  if (error) {
+    throw error;
+  }
+
+  if (created?.password_hash) delete created.password_hash;
+
+  return { success: true, message: 'Instituição cadastrada com sucesso', data: created };
 }
 
 const getAllAdminsService = async ({
@@ -26,7 +56,7 @@ const getAllAdminsService = async ({
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  let query = supabase.from("admins").select("*", { count: "exact" });
+  let query = supabase.from("admins").select("id, name, email, phone, institution, cnpj, created_at", { count: "exact" });
 
   if (email) query = query.eq("email", email);
   if (name) query = query.ilike("name", `%${name}%`);
@@ -49,8 +79,7 @@ const getAllAdminsService = async ({
   };
 };
 
-
 module.exports = {
-    createAdminService,
-    getAllAdminsService
+  createAdminService,
+  getAllAdminsService
 }

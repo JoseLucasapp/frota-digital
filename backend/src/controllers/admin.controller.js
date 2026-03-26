@@ -1,24 +1,24 @@
 const { createAdminService, getAllAdminsService } = require("../services/admin.service");
 
 const createAdminController = async (req, res) => {
-    try {
-        const data = req.body;
+  try {
+    const data = req.body;
 
-        if(!data.name || !data.email || !data.password || !data.phone || !data.institution || !data.cnpj) {
-            return res.status(400).json({ success: false, message: 'Name, email, password, institution and cnpj are required' });
-        }
-
-        const result = await createAdminService(data);
-        res.status(201).json(result);
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+    if (!data.name || !data.email || !data.password || !data.phone || !data.institution || !data.cnpj) {
+      return res.status(400).json({ success: false, message: 'Nome, email, senha, telefone, instituição e CNPJ são obrigatórios' });
     }
+
+    const result = await createAdminService(data);
+    res.status(201).json(result);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
 }
 
 const getAllAdminsController = async (req, res) => {
   try {
-  const { email, name, cnpj, institution, page, pageSize } = req.query;
-const data = await getAllAdminsService({
+    const { email, name, cnpj, institution, page, pageSize } = req.query;
+    const data = await getAllAdminsService({
       email,
       name,
       cnpj,
@@ -34,6 +34,6 @@ const data = await getAllAdminsService({
 }
 
 module.exports = {
-    createAdminController,
-    getAllAdminsController
+  createAdminController,
+  getAllAdminsController
 }
