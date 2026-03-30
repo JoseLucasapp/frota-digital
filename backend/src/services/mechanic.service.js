@@ -242,6 +242,12 @@ const deleteMechanicDocumentService = async ({ mechanicId, documentType, user })
 const deleteMechanicService = async (id, user) => {
   if (!id) throw new Error("id is required");
 
+  if (!user) {
+    const { error } = await supabase.from("mechanics").delete().eq("id", id);
+    if (error) throw error;
+    return { success: true };
+  }
+
   const mechanic = await getMechanicByIdService(id, user);
   if (!mechanic) {
     const error = new Error("Mecânico não encontrado");

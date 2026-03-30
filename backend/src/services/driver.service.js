@@ -54,8 +54,6 @@ const createDriverService = async (data, user) => {
     delete payload.password;
   }
 
-  console.log("CREATE DRIVER PAYLOAD", payload);
-
   const { data: result, error } = await supabase
     .from("drivers")
     .insert(payload)
@@ -251,7 +249,14 @@ const deleteDriverDocumentService = async ({ driverId, documentType, user }) => 
 };
 
 const deleteDriverService = async (id, user) => {
+
   if (!id) throw new Error("id is required");
+
+  if (!user) {
+    const { error } = await supabase.from("drivers").delete().eq("id", id);
+    if (error) throw error;
+    return { success: true };
+  }
 
   const driver = await getDriverByIdService(id, user);
   if (!driver) {

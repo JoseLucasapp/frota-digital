@@ -47,7 +47,7 @@ describe("driver.controller", () => {
             expect(res.status).toHaveBeenCalledWith(400);
             expect(res.json).toHaveBeenCalledWith({
                 success: false,
-                message: "Name, email, phone, password and cpf are required",
+                message: "Name, email, phone and cpf are required",
             });
             expect(driverService.createDriverService).not.toHaveBeenCalled();
         });

@@ -90,6 +90,12 @@ const updateVehicleService = async (id, data, user) => {
 const deleteVehicleService = async (id, user) => {
     if (!id) throw new Error("id is required");
 
+    if (!user) {
+        const { error } = await supabase.from("vehicles").delete().eq("id", id);
+        if (error) throw error;
+        return { success: true };
+    }
+
     const vehicle = await getVehicleByIdService(id, user);
     if (!vehicle) {
         const error = new Error("Veículo não encontrado");
