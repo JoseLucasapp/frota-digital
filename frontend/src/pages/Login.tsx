@@ -68,7 +68,7 @@ const Login = () => {
             <TabsContent value="driver">
               <form onSubmit={(e) => { e.preventDefault(); handleSubmit('DRIVER'); }} className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="driver-identifier" className="text-base font-medium">Email ou CPF</Label>
+                  <Label htmlFor="driver-identifier" className="text-base font-medium">Email</Label>
                   <Input id="driver-identifier" type="text" placeholder="seu@email.com" value={identifier} onChange={(e) => setIdentifier(e.target.value)} className="h-12 text-base bg-secondary border-border" />
                 </div>
                 <div className="space-y-2">
@@ -90,7 +90,7 @@ const Login = () => {
             <TabsContent value="mechanic">
               <form onSubmit={(e) => { e.preventDefault(); handleSubmit('MECHANIC'); }} className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="mech-identifier" className="text-base font-medium">Email ou CNPJ</Label>
+                  <Label htmlFor="mech-identifier" className="text-base font-medium">Email</Label>
                   <Input id="mech-identifier" type="text" placeholder="oficina@email.com" value={identifier} onChange={(e) => setIdentifier(e.target.value)} className="h-12 text-base bg-secondary border-border" />
                 </div>
                 <div className="space-y-2">
