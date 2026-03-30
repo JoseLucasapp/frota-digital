@@ -67,7 +67,7 @@ describe("driver.routes", () => {
     test("POST /driver should call create controller", async () => {
         const res = await request(app).post("/driver").send({
             name: "José",
-            email: "jose@email.com",
+            email: "driver@email.com",
             phone: "83999999999",
             cpf: "123",
         });

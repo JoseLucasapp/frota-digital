@@ -1,7 +1,7 @@
 const { createDriverController, getAllDriversController, getDriverByIdController, updateDriverController, deleteDriverController, uploadDriverDocumentController, deleteDriverDocumentController } = require("../controllers/driver.controller");
 const { attachUser } = require("../middlewares/attachUser.middleware");
 const upload = require("../middlewares/multer");
-const { deleteDriverDocumentService } = require("../services/driver.service");
+const { requireRole } = require("../security/role.guard");
 const { requireAuth } = require("../utils/jwt");
 
 module.exports = (router) => {
@@ -50,6 +50,8 @@ module.exports = (router) => {
    */
   router.post(
     "/driver",
+    requireAuth,
+    attachUser,
     async (req, res) => await createDriverController(req, res),
   );
 
@@ -171,6 +173,8 @@ module.exports = (router) => {
    */
   router.put(
     "/driver/:id",
+    requireAuth,
+    attachUser,
     async (req, res) => await updateDriverController(req, res),
   );
 

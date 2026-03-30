@@ -24,10 +24,10 @@ const createMaintenancesController = async (req, res) => {
             });
         }
 
-        const result = await createMaintenancesService(data);
+        const result = req.user ? await createMaintenancesService(data, req.user) : await createMaintenancesService(data);
         return res.status(201).json(result);
     } catch (error) {
-        return res.status(500).json({
+        return res.status(error.statusCode || 500).json({
             success: false,
             message: error.message,
         });
@@ -36,10 +36,10 @@ const createMaintenancesController = async (req, res) => {
 
 const getAllMaintenancesController = async (req, res) => {
     try {
-        const result = await getAllMaintenancesService(req.query);
+        const result = req.user ? await getAllMaintenancesService(req.query, req.user) : await getAllMaintenancesService(req.query);
         return res.status(200).json(result);
     } catch (error) {
-        return res.status(500).json({
+        return res.status(error.statusCode || 500).json({
             success: false,
             message: error.message,
         });
@@ -49,7 +49,7 @@ const getAllMaintenancesController = async (req, res) => {
 const getMaintenancesByIdController = async (req, res) => {
     try {
         const id = req.params.id;
-        const result = await getMaintenancesByIdService(id);
+        const result = req.user ? await getMaintenancesByIdService(id, req.user) : await getMaintenancesByIdService(id);
 
         if (!result) {
             return res.status(404).json({
@@ -63,7 +63,7 @@ const getMaintenancesByIdController = async (req, res) => {
             data: result,
         });
     } catch (error) {
-        return res.status(500).json({
+        return res.status(error.statusCode || 500).json({
             success: false,
             message: error.message,
         });
@@ -74,14 +74,14 @@ const updateMaintenancesController = async (req, res) => {
     try {
         const id = req.params.id;
         const data = req.body;
-        const result = await updateMaintenancesService(id, data);
+        const result = req.user ? await updateMaintenancesService(id, data, req.user) : await updateMaintenancesService(id, data);
 
         return res.status(200).json({
             success: true,
             data: result,
         });
     } catch (error) {
-        return res.status(500).json({
+        return res.status(error.statusCode || 500).json({
             success: false,
             message: error.message,
         });
@@ -102,6 +102,7 @@ const uploadMaintenancesReceiptController = async (req, res) => {
         const result = await uploadMaintenancesReceiptService({
             maintenanceId: id,
             file: req.file,
+            ...(req.user ? { user: req.user } : {}),
         });
 
         return res.status(200).json({
@@ -110,7 +111,10 @@ const uploadMaintenancesReceiptController = async (req, res) => {
             data: result,
         });
     } catch (error) {
-        const status = error.message === "Maintenance not found" ? 404 : 500;
+        const status =
+            error.message === "Maintenance not found"
+                ? 404
+                : error.statusCode || 500;
 
         return res.status(status).json({
             success: false,
@@ -123,7 +127,7 @@ const deleteMaintenanceReceiptController = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const result = await deleteMaintenanceReceiptService(id);
+        const result = req.user ? await deleteMaintenanceReceiptService(id, req.user) : await deleteMaintenanceReceiptService(id);
 
         return res.status(200).json({
             success: true,
@@ -131,7 +135,7 @@ const deleteMaintenanceReceiptController = async (req, res) => {
             data: result,
         });
     } catch (error) {
-        let status = 500;
+        let status = error.statusCode || 500;
 
         if (error.message === "Maintenance not found") status = 404;
         if (error.message === "receipt not found") status = 404;
@@ -146,14 +150,14 @@ const deleteMaintenanceReceiptController = async (req, res) => {
 const deleteMaintenanceController = async (req, res) => {
     try {
         const id = req.params.id;
-        const result = await deleteMaintenanceService(id);
+        const result = req.user ? await deleteMaintenanceService(id, req.user) : await deleteMaintenanceService(id);
 
         return res.status(200).json({
             success: true,
             data: result,
         });
     } catch (error) {
-        return res.status(500).json({
+        return res.status(error.statusCode || 500).json({
             success: false,
             message: error.message,
         });
