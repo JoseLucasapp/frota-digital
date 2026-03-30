@@ -37,9 +37,11 @@ const createMechanicService = async (data, user) => {
     payload.admin_id = ensureAdminScope(user);
   }
 
-  if (payload.password) {
-    payload.password_hash = await hashPassword(payload.password);
-    payload.is_first_acc = false;
+  if ("password" in payload) {
+    if (payload.password) {
+      payload.password_hash = await hashPassword(payload.password);
+      payload.is_first_acc = false;
+    }
     delete payload.password;
   }
 
