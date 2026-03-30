@@ -40,11 +40,17 @@ const DOCUMENT_TYPE_MAP = {
 const createDriverService = async (data, user) => {
   const payload = {
     ...data,
-    status: DRIVER_STATUS.ACTIVE,
+    status: data.status || DRIVER_STATUS.ACTIVE,
   };
 
   if (user?.role === "ADMIN") {
     payload.admin_id = ensureAdminScope(user);
+  }
+
+  if (payload.password) {
+    payload.password_hash = await hashPassword(payload.password);
+    payload.is_first_acc = false;
+    delete payload.password;
   }
 
   const { data: result, error } = await supabase
@@ -55,7 +61,9 @@ const createDriverService = async (data, user) => {
 
   if (error) throw error;
 
-  sendEmail(data.email, "Conta motorista cadastrada");
+  if (data.email) {
+    sendEmail(data.email, "Conta motorista cadastrada");
+  }
 
   return { success: true, data: result };
 };
@@ -64,7 +72,7 @@ const getAllDriversService = async (query = {}, user) => {
   const page = Math.max(Number(query.page) || 1, 1);
   const limit = Math.max(Number(query.limit) || 10, 1);
   const sortBy = query.sortBy || "created_at";
-  const sortOrder = query.sortOrder === "asc" ? true : false;
+  const sortOrder = query.sortOrder === "asc";
 
   const from = (page - 1) * limit;
   const to = from + limit - 1;
@@ -80,7 +88,9 @@ const getAllDriversService = async (query = {}, user) => {
   if (query.status) request = request.eq("status", query.status);
 
   if (sortBy === "status") {
-    request = request.order("status", { ascending: sortOrder }).order("created_at", { ascending: false });
+    request = request
+      .order("status", { ascending: sortOrder })
+      .order("created_at", { ascending: false });
   } else {
     request = request.order("created_at", { ascending: sortOrder });
   }
@@ -123,14 +133,17 @@ const updateDriverService = async (id, data, user) => {
   if (!id) throw new Error("id is required");
   if (!data || typeof data !== "object") throw new Error("data is required");
 
-  if ("password" in data) {
-    const password_hash = await hashPassword(data.password);
-    data.password_hash = password_hash;
-    data.is_first_acc = false;
-    delete data.password;
+  const payload = { ...data };
+
+  if ("password" in payload) {
+    if (payload.password) {
+      payload.password_hash = await hashPassword(payload.password);
+      payload.is_first_acc = false;
+    }
+    delete payload.password;
   }
 
-  let request = supabase.from("drivers").update(data).eq("id", id);
+  let request = supabase.from("drivers").update(payload).eq("id", id);
 
   if (user?.role === "ADMIN") {
     request = request.eq("admin_id", ensureAdminScope(user));
@@ -237,16 +250,41 @@ const deleteDriverDocumentService = async ({ driverId, documentType, user }) => 
 const deleteDriverService = async (id, user) => {
   if (!id) throw new Error("id is required");
 
+  const driver = await getDriverByIdService(id, user);
+  if (!driver) {
+    const error = new Error("Motorista não encontrado");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const [loansCheck, notificationsCheck] = await Promise.all([
+    supabase.from("loans").select("id", { count: "exact", head: true }).eq("driver_id", id),
+    supabase.from("notifications").select("id", { count: "exact", head: true }).eq("driver_id", id),
+  ]);
+
+  if (loansCheck.error) throw loansCheck.error;
+  if (notificationsCheck.error) throw notificationsCheck.error;
+
+  const blockers = [];
+  if ((loansCheck.count || 0) > 0) blockers.push("empréstimos");
+  if ((notificationsCheck.count || 0) > 0) blockers.push("notificações");
+
+  if (blockers.length > 0) {
+    const error = new Error(
+      `Não é possível excluir este motorista porque ele possui ${blockers.join(", ")} vinculados.`
+    );
+    error.statusCode = 409;
+    throw error;
+  }
+
   let request = supabase.from("drivers").delete().eq("id", id);
 
   if (user?.role === "ADMIN") {
-    const existing = await getDriverByIdService(id, user);
-    if (!existing) {
-      const error = new Error("Driver not found");
-      error.statusCode = 404;
-      throw error;
-    }
-    request = request.eq("admin_id", existing.admin_id);
+    request = request.eq("admin_id", ensureAdminScope(user));
+  }
+
+  if (user?.role === "DRIVER") {
+    request = request.eq("id", user.id);
   }
 
   const { error } = await request;
