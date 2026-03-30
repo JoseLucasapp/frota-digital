@@ -7,6 +7,11 @@ const {
   uploadFileToBucket,
   deleteFileFromBucket,
 } = require("../utils/supabaseBucket");
+const {
+  ensureAdminScope,
+  isAdmin,
+  isMechanic,
+} = require("./scope.service");
 
 const DOCUMENT_TYPE_MAP = {
   cnpj: {
@@ -26,12 +31,30 @@ const DOCUMENT_TYPE_MAP = {
   },
 };
 
-const createMechanicService = async (data) => {
-  data.status = MECHANIC_STATUS.ACTIVE;
+const applyMechanicScope = (request, user) => {
+  if (isAdmin(user)) {
+    return request.eq("admin_id", ensureAdminScope(user));
+  }
+
+  if (isMechanic(user)) {
+    return request.eq("id", user.id);
+  }
+
+  return request;
+};
+
+const createMechanicService = async (data, user) => {
+  const adminId = ensureAdminScope(user);
+
+  const payload = {
+    ...data,
+    admin_id: adminId,
+    status: MECHANIC_STATUS.ACTIVE,
+  };
 
   const { data: result, error } = await supabase
     .from("mechanics")
-    .insert(data)
+    .insert(payload)
     .select()
     .single();
 
@@ -44,11 +67,11 @@ const createMechanicService = async (data) => {
   return { success: true, data: result };
 };
 
-const getAllMechanicsService = async (query = {}) => {
+const getAllMechanicsService = async (query = {}, user) => {
   const page = Math.max(Number(query.page) || 1, 1);
   const limit = Math.max(Number(query.limit) || 10, 1);
   const sortBy = query.sortBy || "created_at";
-  const sortOrder = query.sortOrder === "asc" ? true : false;
+  const sortOrder = query.sortOrder === "asc";
 
   const from = (page - 1) * limit;
   const to = from + limit - 1;
@@ -56,6 +79,8 @@ const getAllMechanicsService = async (query = {}) => {
   let request = supabase
     .from("mechanics")
     .select("*", { count: "exact" });
+
+  request = applyMechanicScope(request, user);
 
   if (query.cnpj) {
     request = request.eq("cnpj", query.cnpj);
@@ -96,16 +121,19 @@ const getAllMechanicsService = async (query = {}) => {
   };
 };
 
-const getMechanicByIdService = async (id) => {
+const getMechanicByIdService = async (id, user) => {
   if (!id) {
     throw new Error("id is required");
   }
 
-  const { data, error } = await supabase
+  let request = supabase
     .from("mechanics")
     .select("*")
-    .eq("id", id)
-    .maybeSingle();
+    .eq("id", id);
+
+  request = applyMechanicScope(request, user);
+
+  const { data, error } = await request.maybeSingle();
 
   if (error) {
     throw error;
@@ -114,7 +142,7 @@ const getMechanicByIdService = async (id) => {
   return data || null;
 };
 
-const updateMechanicService = async (id, data) => {
+const updateMechanicService = async (id, data, user) => {
   if (!id) {
     throw new Error("id is required");
   }
@@ -130,10 +158,14 @@ const updateMechanicService = async (id, data) => {
     delete data.password;
   }
 
-  const { data: result, error } = await supabase
+  let request = supabase
     .from("mechanics")
     .update(data)
-    .eq("id", id)
+    .eq("id", id);
+
+  request = applyMechanicScope(request, user);
+
+  const { data: result, error } = await request
     .select()
     .single();
 
@@ -144,7 +176,7 @@ const updateMechanicService = async (id, data) => {
   return result;
 };
 
-const uploadMechanicDocumentService = async ({ mechanicId, documentType, file }) => {
+const uploadMechanicDocumentService = async ({ mechanicId, documentType, file, user }) => {
   if (!mechanicId) {
     throw new Error("mechanicId is required");
   }
@@ -163,7 +195,7 @@ const uploadMechanicDocumentService = async ({ mechanicId, documentType, file })
     throw new Error("invalid document type");
   }
 
-  const mechanic = await getMechanicByIdService(mechanicId);
+  const mechanic = await getMechanicByIdService(mechanicId, user);
 
   if (!mechanic) {
     throw new Error("Mechanic not found");
@@ -192,10 +224,14 @@ const uploadMechanicDocumentService = async ({ mechanicId, documentType, file })
     [documentConfig.pathField]: uploaded.filePath || uploaded.path || null,
   };
 
-  const { data, error } = await supabase
+  let request = supabase
     .from("mechanics")
     .update(payload)
-    .eq("id", mechanicId)
+    .eq("id", mechanicId);
+
+  request = applyMechanicScope(request, user);
+
+  const { data, error } = await request
     .select("*")
     .single();
 
@@ -210,7 +246,7 @@ const uploadMechanicDocumentService = async ({ mechanicId, documentType, file })
   };
 };
 
-const deleteMechanicDocumentService = async ({ mechanicId, documentType }) => {
+const deleteMechanicDocumentService = async ({ mechanicId, documentType, user }) => {
   if (!mechanicId) {
     throw new Error("mechanicId is required");
   }
@@ -225,7 +261,7 @@ const deleteMechanicDocumentService = async ({ mechanicId, documentType }) => {
     throw new Error("invalid document type");
   }
 
-  const mechanic = await getMechanicByIdService(mechanicId);
+  const mechanic = await getMechanicByIdService(mechanicId, user);
 
   if (!mechanic) {
     throw new Error("Mechanic not found");
@@ -247,10 +283,14 @@ const deleteMechanicDocumentService = async ({ mechanicId, documentType }) => {
     [documentConfig.pathField]: null,
   };
 
-  const { data, error } = await supabase
+  let request = supabase
     .from("mechanics")
     .update(payload)
-    .eq("id", mechanicId)
+    .eq("id", mechanicId);
+
+  request = applyMechanicScope(request, user);
+
+  const { data, error } = await request
     .select("*")
     .single();
 
@@ -264,15 +304,22 @@ const deleteMechanicDocumentService = async ({ mechanicId, documentType }) => {
   };
 };
 
-const deleteMechanicService = async (id) => {
+const deleteMechanicService = async (id, user) => {
   if (!id) {
     throw new Error("id is required");
+  }
+
+  const existing = await getMechanicByIdService(id, user);
+
+  if (!existing) {
+    throw new Error("Mechanic not found");
   }
 
   const { error } = await supabase
     .from("mechanics")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("admin_id", existing.admin_id);
 
   if (error) {
     throw error;

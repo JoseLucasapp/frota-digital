@@ -50,6 +50,9 @@ module.exports = (router) => {
    */
   router.post(
     "/driver",
+    requireAuth,
+    attachUser,
+    requireRole("ADMIN"),
     async (req, res) => await createDriverController(req, res),
   );
 

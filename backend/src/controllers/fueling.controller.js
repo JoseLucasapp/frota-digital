@@ -27,26 +27,26 @@ const createFuelingController = async (req, res) => {
             });
         }
 
-        const result = await createFuelingService(data);
+        const result = await createFuelingService(data, req.user);
         return res.status(201).json(result);
     } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
+        return res.status(error.statusCode || 500).json({ success: false, message: error.message });
     }
 };
 
 const getAllFuelingsController = async (req, res) => {
     try {
-        const result = await getAllFuelingsService(req.query);
+        const result = await getAllFuelingsService(req.query, req.user);
         return res.status(200).json(result);
     } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
+        return res.status(error.statusCode || 500).json({ success: false, message: error.message });
     }
 };
 
 const getFuelingByIdController = async (req, res) => {
     try {
         const id = req.params.id;
-        const result = await getFuelingByIdService(id);
+        const result = await getFuelingByIdService(id, req.user);
 
         if (!result) {
             return res.status(404).json({
@@ -60,7 +60,7 @@ const getFuelingByIdController = async (req, res) => {
             data: result,
         });
     } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
+        return res.status(error.statusCode || 500).json({ success: false, message: error.message });
     }
 };
 
@@ -68,14 +68,14 @@ const updateFuelingController = async (req, res) => {
     try {
         const id = req.params.id;
         const data = req.body;
-        const result = await updateFuelingService(id, data);
+        const result = await updateFuelingService(id, data, req.user);
 
         return res.status(200).json({
             success: true,
             data: result,
         });
     } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
+        return res.status(error.statusCode || 500).json({ success: false, message: error.message });
     }
 };
 
@@ -93,6 +93,7 @@ const uploadFuelingReceiptController = async (req, res) => {
         const result = await uploadFuelingReceiptService({
             fuelingId: id,
             file: req.file,
+            user: req.user,
         });
 
         return res.status(200).json({
@@ -101,7 +102,10 @@ const uploadFuelingReceiptController = async (req, res) => {
             data: result,
         });
     } catch (error) {
-        const status = error.message === "Fueling not found" ? 404 : 500;
+        const status =
+            error.message === "Fueling not found"
+                ? 404
+                : error.statusCode || 500;
 
         return res.status(status).json({
             success: false,
@@ -114,7 +118,7 @@ const deleteFuelingReceiptController = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const result = await deleteFuelingReceiptService(id);
+        const result = await deleteFuelingReceiptService(id, req.user);
 
         return res.status(200).json({
             success: true,
@@ -122,7 +126,7 @@ const deleteFuelingReceiptController = async (req, res) => {
             data: result,
         });
     } catch (error) {
-        let status = 500;
+        let status = error.statusCode || 500;
 
         if (error.message === "Fueling not found") status = 404;
         if (error.message === "receipt not found") status = 404;
@@ -137,14 +141,14 @@ const deleteFuelingReceiptController = async (req, res) => {
 const deleteFuelingController = async (req, res) => {
     try {
         const id = req.params.id;
-        const result = await deleteFuelingService(id);
+        const result = await deleteFuelingService(id, req.user);
 
         return res.status(200).json({
             success: true,
             data: result,
         });
     } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
+        return res.status(error.statusCode || 500).json({ success: false, message: error.message });
     }
 };
 

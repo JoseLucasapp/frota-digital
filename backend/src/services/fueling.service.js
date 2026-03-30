@@ -4,11 +4,26 @@ const {
     uploadFileToBucket,
     deleteFileFromBucket,
 } = require("../utils/supabaseBucket");
+const { ensureAdminScope, isAdmin } = require("./scope.service");
 
-const createFuelingService = async (data) => {
+const applyFuelingScope = (request, user) => {
+    if (isAdmin(user)) {
+        return request.eq("admin_id", ensureAdminScope(user));
+    }
+
+    return request;
+};
+
+const createFuelingService = async (data, user) => {
+    const payload = { ...data };
+
+    if (isAdmin(user)) {
+        payload.admin_id = ensureAdminScope(user);
+    }
+
     const { data: result, error } = await supabase
         .from("fuelings")
-        .insert(data)
+        .insert(payload)
         .select()
         .single();
 
@@ -16,7 +31,7 @@ const createFuelingService = async (data) => {
     return result;
 };
 
-const getAllFuelingsService = async (query = {}) => {
+const getAllFuelingsService = async (query = {}, user) => {
     const page = Math.max(Number(query.page) || 1, 1);
     const limit = Math.max(Number(query.limit) || 10, 1);
 
@@ -26,6 +41,8 @@ const getAllFuelingsService = async (query = {}) => {
     let request = supabase
         .from("fuelings")
         .select("*", { count: "exact" });
+
+    request = applyFuelingScope(request, user);
 
     if (query.vehicle_id) {
         request = request.eq("vehicle_id", query.vehicle_id);
@@ -59,16 +76,19 @@ const getAllFuelingsService = async (query = {}) => {
     };
 };
 
-const getFuelingByIdService = async (id) => {
+const getFuelingByIdService = async (id, user) => {
     if (!id) {
         throw new Error("id is required");
     }
 
-    const { data, error } = await supabase
+    let request = supabase
         .from("fuelings")
         .select("*")
-        .eq("id", id)
-        .maybeSingle();
+        .eq("id", id);
+
+    request = applyFuelingScope(request, user);
+
+    const { data, error } = await request.maybeSingle();
 
     if (error) {
         throw error;
@@ -77,15 +97,19 @@ const getFuelingByIdService = async (id) => {
     return data || null;
 };
 
-const updateFuelingService = async (id, data) => {
+const updateFuelingService = async (id, data, user) => {
     if (!id) {
         throw new Error("id is required");
     }
 
-    const { data: result, error } = await supabase
+    let request = supabase
         .from("fuelings")
         .update(data)
-        .eq("id", id)
+        .eq("id", id);
+
+    request = applyFuelingScope(request, user);
+
+    const { data: result, error } = await request
         .select()
         .single();
 
@@ -96,7 +120,7 @@ const updateFuelingService = async (id, data) => {
     return result;
 };
 
-const uploadFuelingReceiptService = async ({ fuelingId, file }) => {
+const uploadFuelingReceiptService = async ({ fuelingId, file, user }) => {
     if (!fuelingId) {
         throw new Error("fuelingId is required");
     }
@@ -105,7 +129,7 @@ const uploadFuelingReceiptService = async ({ fuelingId, file }) => {
         throw new Error("file is required");
     }
 
-    const fueling = await getFuelingByIdService(fuelingId);
+    const fueling = await getFuelingByIdService(fuelingId, user);
 
     if (!fueling) {
         throw new Error("Fueling not found");
@@ -134,10 +158,14 @@ const uploadFuelingReceiptService = async ({ fuelingId, file }) => {
         receipt_path: uploaded.filePath || uploaded.path || null,
     };
 
-    const { data, error } = await supabase
+    let request = supabase
         .from("fuelings")
         .update(payload)
-        .eq("id", fuelingId)
+        .eq("id", fuelingId);
+
+    request = applyFuelingScope(request, user);
+
+    const { data, error } = await request
         .select("*")
         .single();
 
@@ -151,12 +179,12 @@ const uploadFuelingReceiptService = async ({ fuelingId, file }) => {
     };
 };
 
-const deleteFuelingReceiptService = async (fuelingId) => {
+const deleteFuelingReceiptService = async (fuelingId, user) => {
     if (!fuelingId) {
         throw new Error("fuelingId is required");
     }
 
-    const fueling = await getFuelingByIdService(fuelingId);
+    const fueling = await getFuelingByIdService(fuelingId, user);
 
     if (!fueling) {
         throw new Error("Fueling not found");
@@ -171,13 +199,17 @@ const deleteFuelingReceiptService = async (fuelingId) => {
         filePath: fueling.receipt_path,
     });
 
-    const { data, error } = await supabase
+    let request = supabase
         .from("fuelings")
         .update({
             receipt_url: null,
             receipt_path: null,
         })
-        .eq("id", fuelingId)
+        .eq("id", fuelingId);
+
+    request = applyFuelingScope(request, user);
+
+    const { data, error } = await request
         .select("*")
         .single();
 
@@ -190,12 +222,16 @@ const deleteFuelingReceiptService = async (fuelingId) => {
     };
 };
 
-const deleteFuelingService = async (id) => {
+const deleteFuelingService = async (id, user) => {
     if (!id) {
         throw new Error("id is required");
     }
 
-    const fueling = await getFuelingByIdService(id);
+    const fueling = await getFuelingByIdService(id, user);
+
+    if (!fueling) {
+        throw new Error("Fueling not found");
+    }
 
     if (fueling?.receipt_path) {
         await deleteFileFromBucket({
@@ -204,10 +240,14 @@ const deleteFuelingService = async (id) => {
         });
     }
 
-    const { error } = await supabase
+    let request = supabase
         .from("fuelings")
         .delete()
         .eq("id", id);
+
+    request = applyFuelingScope(request, user);
+
+    const { error } = await request;
 
     if (error) {
         throw error;

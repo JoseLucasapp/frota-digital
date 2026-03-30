@@ -4,11 +4,30 @@ const {
     uploadFileToBucket,
     deleteFileFromBucket,
 } = require("../utils/supabaseBucket");
+const { ensureAdminScope, isAdmin, isMechanic } = require("./scope.service");
 
-const createMaintenancesService = async (data) => {
+const applyMaintenanceScope = (request, user) => {
+    if (isAdmin(user)) {
+        return request.eq("admin_id", ensureAdminScope(user));
+    }
+
+    if (isMechanic(user)) {
+        return request.eq("mechanic_id", user.id);
+    }
+
+    return request;
+};
+
+const createMaintenancesService = async (data, user) => {
+    const payload = { ...data };
+
+    if (isAdmin(user)) {
+        payload.admin_id = ensureAdminScope(user);
+    }
+
     const { data: result, error } = await supabase
         .from("maintenances")
-        .insert(data)
+        .insert(payload)
         .select()
         .single();
 
@@ -16,7 +35,7 @@ const createMaintenancesService = async (data) => {
     return result;
 };
 
-const getAllMaintenancesService = async (query = {}) => {
+const getAllMaintenancesService = async (query = {}, user) => {
     const page = Math.max(Number(query.page) || 1, 1);
     const limit = Math.max(Number(query.limit) || 10, 1);
 
@@ -26,6 +45,8 @@ const getAllMaintenancesService = async (query = {}) => {
     let request = supabase
         .from("maintenances")
         .select("*", { count: "exact" });
+
+    request = applyMaintenanceScope(request, user);
 
     if (query.vehicle_id) {
         request = request.eq("vehicle_id", query.vehicle_id);
@@ -63,16 +84,19 @@ const getAllMaintenancesService = async (query = {}) => {
     };
 };
 
-const getMaintenancesByIdService = async (id) => {
+const getMaintenancesByIdService = async (id, user) => {
     if (!id) {
         throw new Error("id is required");
     }
 
-    const { data, error } = await supabase
+    let request = supabase
         .from("maintenances")
         .select("*")
-        .eq("id", id)
-        .maybeSingle();
+        .eq("id", id);
+
+    request = applyMaintenanceScope(request, user);
+
+    const { data, error } = await request.maybeSingle();
 
     if (error) {
         throw error;
@@ -81,15 +105,19 @@ const getMaintenancesByIdService = async (id) => {
     return data || null;
 };
 
-const updateMaintenancesService = async (id, data) => {
+const updateMaintenancesService = async (id, data, user) => {
     if (!id) {
         throw new Error("id is required");
     }
 
-    const { data: result, error } = await supabase
+    let request = supabase
         .from("maintenances")
         .update(data)
-        .eq("id", id)
+        .eq("id", id);
+
+    request = applyMaintenanceScope(request, user);
+
+    const { data: result, error } = await request
         .select()
         .single();
 
@@ -100,7 +128,7 @@ const updateMaintenancesService = async (id, data) => {
     return result;
 };
 
-const uploadMaintenancesReceiptService = async ({ maintenanceId, file }) => {
+const uploadMaintenancesReceiptService = async ({ maintenanceId, file, user }) => {
     if (!maintenanceId) {
         throw new Error("maintenanceId is required");
     }
@@ -109,7 +137,7 @@ const uploadMaintenancesReceiptService = async ({ maintenanceId, file }) => {
         throw new Error("file is required");
     }
 
-    const maintenance = await getMaintenancesByIdService(maintenanceId);
+    const maintenance = await getMaintenancesByIdService(maintenanceId, user);
 
     if (!maintenance) {
         throw new Error("Maintenance not found");
@@ -138,10 +166,14 @@ const uploadMaintenancesReceiptService = async ({ maintenanceId, file }) => {
         receipt_path: uploaded.filePath || uploaded.path || null,
     };
 
-    const { data, error } = await supabase
+    let request = supabase
         .from("maintenances")
         .update(payload)
-        .eq("id", maintenanceId)
+        .eq("id", maintenanceId);
+
+    request = applyMaintenanceScope(request, user);
+
+    const { data, error } = await request
         .select("*")
         .single();
 
@@ -155,12 +187,12 @@ const uploadMaintenancesReceiptService = async ({ maintenanceId, file }) => {
     };
 };
 
-const deleteMaintenanceReceiptService = async (maintenanceId) => {
+const deleteMaintenanceReceiptService = async (maintenanceId, user) => {
     if (!maintenanceId) {
         throw new Error("maintenanceId is required");
     }
 
-    const maintenance = await getMaintenancesByIdService(maintenanceId);
+    const maintenance = await getMaintenancesByIdService(maintenanceId, user);
 
     if (!maintenance) {
         throw new Error("Maintenance not found");
@@ -175,13 +207,17 @@ const deleteMaintenanceReceiptService = async (maintenanceId) => {
         filePath: maintenance.receipt_path,
     });
 
-    const { data, error } = await supabase
+    let request = supabase
         .from("maintenances")
         .update({
             receipt_url: null,
             receipt_path: null,
         })
-        .eq("id", maintenanceId)
+        .eq("id", maintenanceId);
+
+    request = applyMaintenanceScope(request, user);
+
+    const { data, error } = await request
         .select("*")
         .single();
 
@@ -194,12 +230,16 @@ const deleteMaintenanceReceiptService = async (maintenanceId) => {
     };
 };
 
-const deleteMaintenanceService = async (id) => {
+const deleteMaintenanceService = async (id, user) => {
     if (!id) {
         throw new Error("id is required");
     }
 
-    const maintenance = await getMaintenancesByIdService(id);
+    const maintenance = await getMaintenancesByIdService(id, user);
+
+    if (!maintenance) {
+        throw new Error("Maintenance not found");
+    }
 
     if (maintenance?.receipt_path) {
         await deleteFileFromBucket({
@@ -208,10 +248,14 @@ const deleteMaintenanceService = async (id) => {
         });
     }
 
-    const { error } = await supabase
+    let request = supabase
         .from("maintenances")
         .delete()
         .eq("id", id);
+
+    request = applyMaintenanceScope(request, user);
+
+    const { error } = await request;
 
     if (error) {
         throw error;
@@ -227,5 +271,5 @@ module.exports = {
     updateMaintenancesService,
     uploadMaintenancesReceiptService,
     deleteMaintenanceReceiptService,
-    deleteMaintenanceService
-}
+    deleteMaintenanceService,
+};
