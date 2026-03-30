@@ -173,8 +173,6 @@ module.exports = (router) => {
    */
   router.put(
     "/driver/:id",
-    requireAuth,
-    attachUser,
     async (req, res) => await updateDriverController(req, res),
   );
 

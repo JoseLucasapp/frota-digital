@@ -1,7 +1,7 @@
 const { requireSupabaseAuth, requireAuth } = require("../utils/jwt");
 const { attachUser } = require("../middlewares/attachUser.middleware");
 const { requireRole } = require("../security/role.guard");
-const {loginController} = require('../controllers/auth.controller')
+const { loginController, validateDriverFirstAccessController, validateMechanicFirstAccessController, completeDriverFirstAccessController, completeMechanicFirstAccessController } = require('../controllers/auth.controller')
 
 module.exports = (router) => {
   /**
@@ -106,5 +106,21 @@ module.exports = (router) => {
     async (req, res) => {
       res.json({ ok: true, role: req.user.role });
     },
+  );
+
+  router.post("/login/first-access/driver", async (req, res) =>
+    await validateDriverFirstAccessController(req, res)
+  );
+
+  router.post("/login/first-access/mechanic", async (req, res) =>
+    await validateMechanicFirstAccessController(req, res)
+  );
+
+  router.post("/login/first-access/driver/complete", async (req, res) =>
+    await completeDriverFirstAccessController(req, res)
+  );
+
+  router.post("/login/first-access/mechanic/complete", async (req, res) =>
+    await completeMechanicFirstAccessController(req, res)
   );
 }

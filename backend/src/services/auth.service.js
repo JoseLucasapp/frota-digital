@@ -1,5 +1,5 @@
 const supabase = require("../config/supabase");
-const { verifyPassword } = require("../utils/hash");
+const { verifyPassword, hashPassword } = require("../utils/hash");
 const { createToken } = require("../utils/jwt");
 
 const TABLES = [
@@ -87,7 +87,165 @@ async function loginService({ email, password }) {
   };
 }
 
+const validateDriverFirstAccessService = async ({ email, cpf }) => {
+  if (!email || !cpf) {
+    const err = new Error("Email and cpf are required");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const { data, error } = await supabase
+    .from("drivers")
+    .select("*")
+    .eq("email", String(email).trim())
+    .eq("cpf", String(cpf).trim())
+    .eq("is_first_acc", true)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  if (!data) {
+    const err = new Error("Driver not found for first access");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  return {
+    success: true,
+    user: {
+      id: data.id,
+      role: "DRIVER",
+      name: data.name,
+      email: data.email,
+      is_first_acc: data.is_first_acc,
+    },
+  };
+};
+
+const validateMechanicFirstAccessService = async ({ email, cnpj }) => {
+  if (!email || !cnpj) {
+    const err = new Error("Email and cnpj are required");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const { data, error } = await supabase
+    .from("mechanics")
+    .select("*")
+    .eq("email", String(email).trim())
+    .eq("cnpj", String(cnpj).trim())
+    .eq("is_first_acc", true)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  if (!data) {
+    const err = new Error("Mechanic not found for first access");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  return {
+    success: true,
+    user: {
+      id: data.id,
+      role: "MECHANIC",
+      name: data.name,
+      email: data.email,
+      is_first_acc: data.is_first_acc,
+    },
+  };
+};
+
+const completeDriverFirstAccessService = async ({ userId, password }) => {
+  if (!userId || !password) {
+    const err = new Error("userId and password are required");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const { data: driver, error: findError } = await supabase
+    .from("drivers")
+    .select("*")
+    .eq("id", userId)
+    .eq("is_first_acc", true)
+    .maybeSingle();
+
+  if (findError) throw findError;
+
+  if (!driver) {
+    const err = new Error("Driver not found for first access");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const password_hash = await hashPassword(password);
+
+  const { data, error } = await supabase
+    .from("drivers")
+    .update({
+      password_hash,
+      is_first_acc: false,
+    })
+    .eq("id", userId)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+
+  return {
+    success: true,
+    user: data,
+  };
+};
+
+const completeMechanicFirstAccessService = async ({ userId, password }) => {
+  if (!userId || !password) {
+    const err = new Error("userId and password are required");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const { data: mechanic, error: findError } = await supabase
+    .from("mechanics")
+    .select("*")
+    .eq("id", userId)
+    .eq("is_first_acc", true)
+    .maybeSingle();
+
+  if (findError) throw findError;
+
+  if (!mechanic) {
+    const err = new Error("Mechanic not found for first access");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const password_hash = await hashPassword(password);
+
+  const { data, error } = await supabase
+    .from("mechanics")
+    .update({
+      password_hash,
+      is_first_acc: false,
+    })
+    .eq("id", userId)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+
+  return {
+    success: true,
+    user: data,
+  };
+};
+
 module.exports = {
   getProfileByUserId,
   loginService,
+  validateDriverFirstAccessService,
+  validateMechanicFirstAccessService,
+  completeDriverFirstAccessService,
+  completeMechanicFirstAccessService,
 };
