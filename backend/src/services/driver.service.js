@@ -46,6 +46,11 @@ const createDriverService = async (data, user) => {
   if (user?.role === "ADMIN") {
     payload.admin_id = ensureAdminScope(user);
   }
+
+  if (!("is_first_acc" in payload)) {
+    payload.is_first_acc = true;
+  }
+
   if ("password" in payload) {
     if (payload.password) {
       payload.password_hash = await hashPassword(payload.password);

@@ -34,12 +34,10 @@ const DriverDashboard = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const done = localStorage.getItem("first_login_done_driver") === "1";
-
-    if (!done) {
+    if (user?.is_first_acc !== false) {
       navigate("/first-login?role=driver", { replace: true });
     }
-  }, [navigate]);
+  }, [navigate, user?.is_first_acc]);
 
   useEffect(() => {
     const load = async () => {
@@ -288,8 +286,8 @@ const DriverDashboard = () => {
             <button
               onClick={() => setStatus("parado")}
               className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl transition-all duration-200 font-bold ${status === "parado"
-                  ? "bg-secondary text-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-secondary/30"
+                ? "bg-secondary text-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-secondary/30"
                 }`}
             >
               Parado
@@ -298,8 +296,8 @@ const DriverDashboard = () => {
             <button
               onClick={() => setStatus("uso")}
               className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl transition-all duration-200 font-bold ${status === "uso"
-                  ? "bg-success text-white shadow-lg"
-                  : "text-muted-foreground hover:bg-secondary/30"
+                ? "bg-success text-white shadow-lg"
+                : "text-muted-foreground hover:bg-secondary/30"
                 }`}
             >
               <div

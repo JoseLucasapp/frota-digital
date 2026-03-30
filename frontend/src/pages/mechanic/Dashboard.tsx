@@ -83,12 +83,10 @@ const MechanicDashboard = () => {
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
-    const done = localStorage.getItem("first_login_done_mechanic") === "1";
-
-    if (!done) {
+    if (user?.is_first_acc !== false) {
       navigate("/first-login?role=mechanic", { replace: true });
     }
-  }, [navigate]);
+  }, [navigate, user?.is_first_acc]);
 
   const loadData = async () => {
     try {

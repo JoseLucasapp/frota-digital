@@ -34,7 +34,13 @@ const Login = () => {
       }
 
       setAuthSession(response.token, response.user);
-      navigate(role === 'DRIVER' ? '/driver' : '/mechanic', { replace: true });
+      const mustSetPassword = response.user?.is_first_acc !== false;
+
+      if (mustSetPassword) {
+        navigate(`/first-login?role=${role === 'DRIVER' ? 'driver' : 'mechanic'}`, { replace: true });
+      } else {
+        navigate(role === 'DRIVER' ? '/driver' : '/mechanic', { replace: true });
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Falha ao fazer login');
     } finally {
@@ -84,6 +90,13 @@ const Login = () => {
                 <Button type="submit" disabled={loading} className="w-full h-12 text-lg font-semibold gradient-primary hover:opacity-90 transition-opacity">
                   {loading && activeTab === 'driver' ? 'Entrando...' : 'Entrar como Motorista'}
                 </Button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/first-login?role=driver")}
+                  className="text-sm text-primary hover:underline"
+                >
+                  Primeiro acesso? Criar senha
+                </button>
               </form>
             </TabsContent>
 
@@ -106,6 +119,13 @@ const Login = () => {
                 <Button type="submit" disabled={loading} className="w-full h-12 text-lg font-semibold gradient-primary hover:opacity-90 transition-opacity">
                   {loading && activeTab === 'mechanic' ? 'Entrando...' : 'Entrar como Mecânico'}
                 </Button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/first-login?role=mechanic")}
+                  className="text-sm text-primary hover:underline"
+                >
+                  Primeiro acesso? Criar senha
+                </button>
               </form>
             </TabsContent>
           </Tabs>
