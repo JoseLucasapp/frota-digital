@@ -40,6 +40,7 @@ const DOCUMENT_TYPE_MAP = {
 const createDriverService = async (data, user) => {
   const payload = {
     ...data,
+    password_hash: null,
     status: DRIVER_STATUS.ACTIVE,
   };
 

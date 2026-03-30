@@ -30,6 +30,7 @@ const DOCUMENT_TYPE_MAP = {
 const createMechanicService = async (data, user) => {
   const payload = {
     ...data,
+    password_hash: null,
     status: MECHANIC_STATUS.ACTIVE,
   };
 
