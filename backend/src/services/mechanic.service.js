@@ -30,12 +30,17 @@ const DOCUMENT_TYPE_MAP = {
 const createMechanicService = async (data, user) => {
   const payload = {
     ...data,
-    password_hash: null,
-    status: MECHANIC_STATUS.ACTIVE,
+    status: data.status || MECHANIC_STATUS.ACTIVE,
   };
 
   if (user?.role === "ADMIN") {
     payload.admin_id = ensureAdminScope(user);
+  }
+
+  if (payload.password) {
+    payload.password_hash = await hashPassword(payload.password);
+    payload.is_first_acc = false;
+    delete payload.password;
   }
 
   const { data: result, error } = await supabase
@@ -44,11 +49,11 @@ const createMechanicService = async (data, user) => {
     .select()
     .single();
 
-  if (error) {
-    throw error;
-  }
+  if (error) throw error;
 
-  sendEmail(data.email, "Conta mecânico cadastrada");
+  if (data.email) {
+    sendEmail(data.email, "Conta mecânico cadastrada");
+  }
 
   return { success: true, data: result };
 };
@@ -62,25 +67,15 @@ const getAllMechanicsService = async (query = {}, user) => {
   const from = (page - 1) * limit;
   const to = from + limit - 1;
 
-  let request = supabase
-    .from("mechanics")
-    .select("*", { count: "exact" });
+  let request = supabase.from("mechanics").select("*", { count: "exact" });
 
   if (user?.role === "ADMIN") {
     request = request.eq("admin_id", ensureAdminScope(user));
   }
 
-  if (query.cnpj) {
-    request = request.eq("cnpj", query.cnpj);
-  }
-
-  if (query.name) {
-    request = request.ilike("name", `%${query.name}%`);
-  }
-
-  if (query.status) {
-    request = request.eq("status", query.status);
-  }
+  if (query.cnpj) request = request.eq("cnpj", query.cnpj);
+  if (query.name) request = request.ilike("name", `%${query.name}%`);
+  if (query.status) request = request.eq("status", query.status);
 
   if (sortBy === "status") {
     request = request
@@ -93,10 +88,7 @@ const getAllMechanicsService = async (query = {}, user) => {
   request = request.range(from, to);
 
   const { data, error, count } = await request;
-
-  if (error) {
-    throw error;
-  }
+  if (error) throw error;
 
   return {
     data,
@@ -110,14 +102,9 @@ const getAllMechanicsService = async (query = {}, user) => {
 };
 
 const getMechanicByIdService = async (id, user) => {
-  if (!id) {
-    throw new Error("id is required");
-  }
+  if (!id) throw new Error("id is required");
 
-  let request = supabase
-    .from("mechanics")
-    .select("*")
-    .eq("id", id);
+  let request = supabase.from("mechanics").select("*").eq("id", id);
 
   if (user?.role === "ADMIN") {
     request = request.eq("admin_id", ensureAdminScope(user));
@@ -128,34 +115,25 @@ const getMechanicByIdService = async (id, user) => {
   }
 
   const { data, error } = await request.maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
+  if (error) throw error;
   return data || null;
 };
 
 const updateMechanicService = async (id, data, user) => {
-  if (!id) {
-    throw new Error("id is required");
+  if (!id) throw new Error("id is required");
+  if (!data || typeof data !== "object") throw new Error("data is required");
+
+  const payload = { ...data };
+
+  if ("password" in payload) {
+    if (payload.password) {
+      payload.password_hash = await hashPassword(payload.password);
+      payload.is_first_acc = false;
+    }
+    delete payload.password;
   }
 
-  if (!data || typeof data !== "object") {
-    throw new Error("data is required");
-  }
-
-  if ("password" in data) {
-    const password_hash = await hashPassword(data.password);
-    data.password_hash = password_hash;
-    data.is_first_acc = false;
-    delete data.password;
-  }
-
-  let request = supabase
-    .from("mechanics")
-    .update(data)
-    .eq("id", id);
+  let request = supabase.from("mechanics").update(payload).eq("id", id);
 
   if (user?.role === "ADMIN") {
     request = request.eq("admin_id", ensureAdminScope(user));
@@ -165,14 +143,8 @@ const updateMechanicService = async (id, data, user) => {
     request = request.eq("id", user.id);
   }
 
-  const { data: result, error } = await request
-    .select()
-    .single();
-
-  if (error) {
-    throw error;
-  }
-
+  const { data: result, error } = await request.select().single();
+  if (error) throw error;
   return result;
 };
 
@@ -210,10 +182,7 @@ const uploadMechanicDocumentService = async ({ mechanicId, documentType, file, u
     [documentConfig.pathField]: uploaded.filePath || uploaded.path || null,
   };
 
-  let request = supabase
-    .from("mechanics")
-    .update(payload)
-    .eq("id", mechanicId);
+  let request = supabase.from("mechanics").update(payload).eq("id", mechanicId);
 
   if (user?.role === "ADMIN") {
     request = request.eq("admin_id", ensureAdminScope(user));
@@ -252,10 +221,7 @@ const deleteMechanicDocumentService = async ({ mechanicId, documentType, user })
     [documentConfig.pathField]: null,
   };
 
-  let request = supabase
-    .from("mechanics")
-    .update(payload)
-    .eq("id", mechanicId);
+  let request = supabase.from("mechanics").update(payload).eq("id", mechanicId);
 
   if (user?.role === "ADMIN") {
     request = request.eq("admin_id", ensureAdminScope(user));
@@ -274,11 +240,41 @@ const deleteMechanicDocumentService = async ({ mechanicId, documentType, user })
 const deleteMechanicService = async (id, user) => {
   if (!id) throw new Error("id is required");
 
+  const mechanic = await getMechanicByIdService(id, user);
+  if (!mechanic) {
+    const error = new Error("Mecânico não encontrado");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const [maintenancesCheck] = await Promise.all([
+    supabase
+      .from("maintenances")
+      .select("id", { count: "exact", head: true })
+      .eq("mechanic_id", id),
+  ]);
+
+  if (maintenancesCheck.error) throw maintenancesCheck.error;
+
+  const blockers = [];
+  if ((maintenancesCheck.count || 0) > 0) blockers.push("manutenções");
+
+  if (blockers.length > 0) {
+    const error = new Error(
+      `Não é possível excluir este mecânico porque ele possui ${blockers.join(", ")} vinculadas.`
+    );
+    error.statusCode = 409;
+    throw error;
+  }
+
   let request = supabase.from("mechanics").delete().eq("id", id);
+
   if (user?.role === "ADMIN") {
-    const existing = await getMechanicByIdService(id, user);
-    if (!existing) throw new Error("Mechanic not found");
-    request = request.eq("admin_id", existing.admin_id);
+    request = request.eq("admin_id", ensureAdminScope(user));
+  }
+
+  if (user?.role === "MECHANIC") {
+    request = request.eq("id", user.id);
   }
 
   const { error } = await request;
