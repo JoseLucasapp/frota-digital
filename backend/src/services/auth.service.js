@@ -3,9 +3,9 @@ const { verifyPassword } = require("../utils/hash");
 const { createToken } = require("../utils/jwt");
 
 const TABLES = [
-  { table: "admins", role: "ADMIN", identifierFields: ["email", "cnpj", "institution"] },
-  { table: "mechanics", role: "MECHANIC", identifierFields: ["email", "cnpj"] },
-  { table: "drivers", role: "DRIVER", identifierFields: ["email", "cpf"] },
+  { table: "admins", role: "ADMIN" },
+  { table: "mechanics", role: "MECHANIC" },
+  { table: "drivers", role: "DRIVER" },
 ];
 
 const getProfileByUserId = async (userId) => {
@@ -29,40 +29,36 @@ const getProfileByUserId = async (userId) => {
   return null;
 };
 
-async function findUserByIdentifier(identifier) {
-  const cleanIdentifier = String(identifier || "").trim();
+async function findUserByEmail(email) {
+  const cleanEmail = String(email || "").trim();
 
   for (const item of TABLES) {
-    for (const field of item.identifierFields) {
-      const { data, error } = await supabase
-        .from(item.table)
-        .select("*")
-        .eq(field, cleanIdentifier)
-        .maybeSingle();
+    const { data, error } = await supabase
+      .from(item.table)
+      .select("*")
+      .eq("email", cleanEmail)
+      .maybeSingle();
 
-      if (error) throw error;
-      if (data) {
-        return { user: data, role: item.role };
-      }
+    if (error) throw error;
+    if (data) {
+      return { user: data, role: item.role };
     }
   }
 
   return null;
 }
 
-async function loginService({ email, password, institution }) {
-  const identifier = (email || institution || "").trim();
-
-  if (!identifier || !password) {
-    const err = new Error("Email/CNPJ/instituição e senha são obrigatórios");
+async function loginService({ email, password }) {
+  if (!email || !password) {
+    const err = new Error("Email and password required");
     err.statusCode = 400;
     throw err;
   }
 
-  const found = await findUserByIdentifier(identifier);
+  const found = await findUserByEmail(email);
 
   if (!found) {
-    const err = new Error("Usuário não encontrado");
+    const err = new Error("Invalid credentials");
     err.statusCode = 401;
     throw err;
   }
@@ -72,7 +68,7 @@ async function loginService({ email, password, institution }) {
   const validPassword = await verifyPassword(password, foundUser.password_hash);
 
   if (!validPassword) {
-    const err = new Error("Senha inválida");
+    const err = new Error("Invalid credentials");
     err.statusCode = 401;
     throw err;
   }
@@ -83,7 +79,6 @@ async function loginService({ email, password, institution }) {
   delete sanitizedUser.password_hash;
 
   return {
-    success: true,
     token,
     user: {
       ...sanitizedUser,

@@ -1,18 +1,10 @@
 const supabase = require("../config/supabase");
-const { ensureAdminScope, isAdmin } = require("./scope.service");
-
-const applyLoanScope = (request, user) => {
-    if (isAdmin(user)) {
-        return request.eq("admin_id", ensureAdminScope(user));
-    }
-
-    return request;
-};
+const { ensureAdminScope } = require("./scope.service");
 
 const createLoansService = async (data, user) => {
     const payload = { ...data };
 
-    if (isAdmin(user)) {
+    if (user?.role === "ADMIN") {
         payload.admin_id = ensureAdminScope(user);
     }
 
@@ -34,28 +26,24 @@ const getAllLoansService = async (query = {}, user) => {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    let request = supabase
-        .from("loans")
-        .select("*", { count: "exact" });
+    let request = supabase.from("loans").select("*", { count: "exact" });
 
-    request = applyLoanScope(request, user);
-
-    if (query.vehicle_id) {
-        request = request.eq("vehicle_id", query.vehicle_id);
+    if (user?.role === "ADMIN") {
+        request = request.eq("admin_id", ensureAdminScope(user));
     }
 
-    if (query.driver_id) {
-        request = request.eq("driver_id", query.driver_id);
+    if (user?.role === "DRIVER") {
+        request = request.eq("driver_id", user.id);
     }
+
+    if (query.vehicle_id) request = request.eq("vehicle_id", query.vehicle_id);
+    if (query.driver_id) request = request.eq("driver_id", query.driver_id);
 
     request = request.order("created_at", { ascending: sortOrder });
     request = request.range(from, to);
 
     const { data, error, count } = await request;
-
-    if (error) {
-        throw error;
-    }
+    if (error) throw error;
 
     return {
         data,
@@ -69,66 +57,56 @@ const getAllLoansService = async (query = {}, user) => {
 };
 
 const getLoanByIdService = async (id, user) => {
-    if (!id) {
-        throw new Error("id is required");
+    if (!id) throw new Error("id is required");
+
+    let request = supabase.from("loans").select("*").eq("id", id);
+
+    if (user?.role === "ADMIN") {
+        request = request.eq("admin_id", ensureAdminScope(user));
     }
 
-    let request = supabase
-        .from("loans")
-        .select("*")
-        .eq("id", id);
-
-    request = applyLoanScope(request, user);
+    if (user?.role === "DRIVER") {
+        request = request.eq("driver_id", user.id);
+    }
 
     const { data, error } = await request.maybeSingle();
-
-    if (error) {
-        throw error;
-    }
-
+    if (error) throw error;
     return data || null;
 };
 
 const updateLoanService = async (id, data, user) => {
-    if (!id) {
-        throw new Error("id is required");
+    if (!id) throw new Error("id is required");
+
+    let request = supabase.from("loans").update(data).eq("id", id);
+
+    if (user?.role === "ADMIN") {
+        request = request.eq("admin_id", ensureAdminScope(user));
     }
 
-    let request = supabase
-        .from("loans")
-        .update(data)
-        .eq("id", id);
-
-    request = applyLoanScope(request, user);
-
-    const { data: result, error } = await request
-        .select()
-        .single();
-
-    if (error) {
-        throw error;
+    if (user?.role === "DRIVER") {
+        request = request.eq("driver_id", user.id);
     }
 
+    const { data: result, error } = await request.select().single();
+    if (error) throw error;
     return result;
 };
 
 const deleteLoanService = async (id, user) => {
-    if (!id) {
-        throw new Error("id is required");
+    if (!id) throw new Error("id is required");
+
+    let request = supabase.from("loans").delete().eq("id", id);
+
+    if (user?.role === "ADMIN") {
+        request = request.eq("admin_id", ensureAdminScope(user));
     }
 
-    let request = supabase
-        .from("loans")
-        .delete()
-        .eq("id", id);
-
-    request = applyLoanScope(request, user);
+    if (user?.role === "DRIVER") {
+        request = request.eq("driver_id", user.id);
+    }
 
     const { error } = await request;
-
-    if (error) {
-        throw error;
-    }
+    if (error) throw error;
 
     return { success: true };
 };

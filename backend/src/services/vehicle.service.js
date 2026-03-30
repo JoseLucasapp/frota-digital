@@ -2,11 +2,15 @@ const supabase = require("../config/supabase");
 const { ensureAdminScope, applyAdminScope } = require("./scope.service");
 
 const createVehicleService = async (data, user) => {
-    const adminId = ensureAdminScope(user);
+    const payload = { ...data };
+
+    if (user?.role === "ADMIN") {
+        payload.admin_id = ensureAdminScope(user);
+    }
 
     const { data: result, error } = await supabase
         .from("vehicles")
-        .insert({ ...data, admin_id: adminId })
+        .insert(payload)
         .select()
         .single();
 

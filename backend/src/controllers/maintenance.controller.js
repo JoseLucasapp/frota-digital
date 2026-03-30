@@ -24,7 +24,7 @@ const createMaintenancesController = async (req, res) => {
             });
         }
 
-        const result = await createMaintenancesService(data, req.user);
+        const result = req.user ? await createMaintenancesService(data, req.user) : await createMaintenancesService(data);
         return res.status(201).json(result);
     } catch (error) {
         return res.status(error.statusCode || 500).json({
@@ -36,7 +36,7 @@ const createMaintenancesController = async (req, res) => {
 
 const getAllMaintenancesController = async (req, res) => {
     try {
-        const result = await getAllMaintenancesService(req.query, req.user);
+        const result = req.user ? await getAllMaintenancesService(req.query, req.user) : await getAllMaintenancesService(req.query);
         return res.status(200).json(result);
     } catch (error) {
         return res.status(error.statusCode || 500).json({
@@ -49,7 +49,7 @@ const getAllMaintenancesController = async (req, res) => {
 const getMaintenancesByIdController = async (req, res) => {
     try {
         const id = req.params.id;
-        const result = await getMaintenancesByIdService(id, req.user);
+        const result = req.user ? await getMaintenancesByIdService(id, req.user) : await getMaintenancesByIdService(id);
 
         if (!result) {
             return res.status(404).json({
@@ -74,7 +74,7 @@ const updateMaintenancesController = async (req, res) => {
     try {
         const id = req.params.id;
         const data = req.body;
-        const result = await updateMaintenancesService(id, data, req.user);
+        const result = req.user ? await updateMaintenancesService(id, data, req.user) : await updateMaintenancesService(id, data);
 
         return res.status(200).json({
             success: true,
@@ -102,7 +102,7 @@ const uploadMaintenancesReceiptController = async (req, res) => {
         const result = await uploadMaintenancesReceiptService({
             maintenanceId: id,
             file: req.file,
-            user: req.user,
+            ...(req.user ? { user: req.user } : {}),
         });
 
         return res.status(200).json({
@@ -127,7 +127,7 @@ const deleteMaintenanceReceiptController = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const result = await deleteMaintenanceReceiptService(id, req.user);
+        const result = req.user ? await deleteMaintenanceReceiptService(id, req.user) : await deleteMaintenanceReceiptService(id);
 
         return res.status(200).json({
             success: true,
@@ -150,7 +150,7 @@ const deleteMaintenanceReceiptController = async (req, res) => {
 const deleteMaintenanceController = async (req, res) => {
     try {
         const id = req.params.id;
-        const result = await deleteMaintenanceService(id, req.user);
+        const result = req.user ? await deleteMaintenanceService(id, req.user) : await deleteMaintenanceService(id);
 
         return res.status(200).json({
             success: true,

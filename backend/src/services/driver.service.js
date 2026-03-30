@@ -38,13 +38,14 @@ const DOCUMENT_TYPE_MAP = {
 };
 
 const createDriverService = async (data, user) => {
-  const adminId = ensureAdminScope(user);
-
   const payload = {
     ...data,
-    admin_id: adminId,
     status: DRIVER_STATUS.ACTIVE,
   };
+
+  if (user?.role === "ADMIN") {
+    payload.admin_id = ensureAdminScope(user);
+  }
 
   const { data: result, error } = await supabase
     .from("drivers")
@@ -109,6 +110,10 @@ const getDriverByIdService = async (id, user) => {
     request = request.eq("admin_id", ensureAdminScope(user));
   }
 
+  if (user?.role === "DRIVER") {
+    request = request.eq("id", user.id);
+  }
+
   const { data, error } = await request.maybeSingle();
   if (error) throw error;
   return data || null;
@@ -131,35 +136,25 @@ const updateDriverService = async (id, data, user) => {
     request = request.eq("admin_id", ensureAdminScope(user));
   }
 
+  if (user?.role === "DRIVER") {
+    request = request.eq("id", user.id);
+  }
+
   const { data: result, error } = await request.select().single();
   if (error) throw error;
   return result;
 };
 
-const uploadDriverDocumentService = async ({ driverId, documentType, file }) => {
-  if (!driverId) {
-    throw new Error("driverId is required");
-  }
-
-  if (!documentType) {
-    throw new Error("documentType is required");
-  }
-
-  if (!file) {
-    throw new Error("file is required");
-  }
+const uploadDriverDocumentService = async ({ driverId, documentType, file, user }) => {
+  if (!driverId) throw new Error("driverId is required");
+  if (!documentType) throw new Error("documentType is required");
+  if (!file) throw new Error("file is required");
 
   const documentConfig = DOCUMENT_TYPE_MAP[documentType];
+  if (!documentConfig) throw new Error("invalid document type");
 
-  if (!documentConfig) {
-    throw new Error("invalid document type");
-  }
-
-  const driver = await getDriverByIdService(driverId);
-
-  if (!driver) {
-    throw new Error("Driver not found");
-  }
+  const driver = await getDriverByIdService(driverId, user);
+  if (!driver) throw new Error("Driver not found");
 
   if (driver[documentConfig.pathField]) {
     await deleteFileFromBucket({
@@ -184,50 +179,34 @@ const uploadDriverDocumentService = async ({ driverId, documentType, file }) => 
     [documentConfig.pathField]: uploaded.filePath || uploaded.path || null,
   };
 
-  const { data, error } = await supabase
-    .from("drivers")
-    .update(payload)
-    .eq("id", driverId)
-    .select("*")
-    .single();
+  let request = supabase.from("drivers").update(payload).eq("id", driverId);
 
-  if (error) {
-    throw error;
+  if (user?.role === "ADMIN") {
+    request = request.eq("admin_id", ensureAdminScope(user));
   }
 
-  return {
-    driver: data,
-    documentType,
-    file: uploaded,
-  };
+  if (user?.role === "DRIVER") {
+    request = request.eq("id", user.id);
+  }
+
+  const { data, error } = await request.select("*").single();
+  if (error) throw error;
+
+  return { driver: data, documentType, file: uploaded };
 };
 
-const deleteDriverDocumentService = async ({ driverId, documentType }) => {
-  if (!driverId) {
-    throw new Error("driverId is required");
-  }
-
-  if (!documentType) {
-    throw new Error("documentType is required");
-  }
+const deleteDriverDocumentService = async ({ driverId, documentType, user }) => {
+  if (!driverId) throw new Error("driverId is required");
+  if (!documentType) throw new Error("documentType is required");
 
   const documentConfig = DOCUMENT_TYPE_MAP[documentType];
+  if (!documentConfig) throw new Error("invalid document type");
 
-  if (!documentConfig) {
-    throw new Error("invalid document type");
-  }
-
-  const driver = await getDriverByIdService(driverId);
-
-  if (!driver) {
-    throw new Error("Driver not found");
-  }
+  const driver = await getDriverByIdService(driverId, user);
+  if (!driver) throw new Error("Driver not found");
 
   const existingPath = driver[documentConfig.pathField];
-
-  if (!existingPath) {
-    throw new Error("document not found");
-  }
+  if (!existingPath) throw new Error("document not found");
 
   await deleteFileFromBucket({
     bucket: "documents",
@@ -239,34 +218,38 @@ const deleteDriverDocumentService = async ({ driverId, documentType }) => {
     [documentConfig.pathField]: null,
   };
 
-  const { data, error } = await supabase
-    .from("drivers")
-    .update(payload)
-    .eq("id", driverId)
-    .select("*")
-    .single();
+  let request = supabase.from("drivers").update(payload).eq("id", driverId);
 
-  if (error) {
-    throw error;
+  if (user?.role === "ADMIN") {
+    request = request.eq("admin_id", ensureAdminScope(user));
   }
 
-  return {
-    driver: data,
-    documentType,
-  };
+  if (user?.role === "DRIVER") {
+    request = request.eq("id", user.id);
+  }
+
+  const { data, error } = await request.select("*").single();
+  if (error) throw error;
+
+  return { driver: data, documentType };
 };
 
 const deleteDriverService = async (id, user) => {
   if (!id) throw new Error("id is required");
 
-  const existing = await getDriverByIdService(id, user);
-  if (!existing) {
-    const error = new Error("Driver not found");
-    error.statusCode = 404;
-    throw error;
+  let request = supabase.from("drivers").delete().eq("id", id);
+
+  if (user?.role === "ADMIN") {
+    const existing = await getDriverByIdService(id, user);
+    if (!existing) {
+      const error = new Error("Driver not found");
+      error.statusCode = 404;
+      throw error;
+    }
+    request = request.eq("admin_id", existing.admin_id);
   }
 
-  const { error } = await supabase.from("drivers").delete().eq("id", id).eq("admin_id", existing.admin_id);
+  const { error } = await request;
   if (error) throw error;
 
   return { success: true };

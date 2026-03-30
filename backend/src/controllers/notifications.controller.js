@@ -17,7 +17,7 @@ const createNotificationController = async (req, res) => {
             });
         }
 
-        const result = await createNotificationsService(data, req.user);
+        const result = req.user ? await createNotificationsService(data, req.user) : await createNotificationsService(data);
         return res.status(201).json(result);
     } catch (error) {
         return res.status(error.statusCode || 500).json({ success: false, message: error.message });
@@ -26,7 +26,7 @@ const createNotificationController = async (req, res) => {
 
 const getAllNotificationsController = async (req, res) => {
     try {
-        const result = await getAllNotificationsService(req.query, req.user);
+        const result = req.user ? await getAllNotificationsService(req.query, req.user) : await getAllNotificationsService(req.query);
         return res.status(200).json(result);
     } catch (error) {
         return res.status(error.statusCode || 500).json({ success: false, message: error.message });
@@ -36,7 +36,7 @@ const getAllNotificationsController = async (req, res) => {
 const getNotificationByIdController = async (req, res) => {
     try {
         const id = req.params.id;
-        const result = await getNotificationByIdService(id, req.user);
+        const result = req.user ? await getNotificationByIdService(id, req.user) : await getNotificationByIdService(id);
 
         if (!result) {
             return res.status(404).json({
@@ -58,7 +58,7 @@ const updateNotificationController = async (req, res) => {
     try {
         const id = req.params.id;
         const data = req.body;
-        const result = await updateNotificationService(id, data, req.user);
+        const result = req.user ? await updateNotificationService(id, data, req.user) : await updateNotificationService(id, data);
 
         return res.status(200).json({
             success: true,
@@ -72,7 +72,7 @@ const updateNotificationController = async (req, res) => {
 const deleteNotificationController = async (req, res) => {
     try {
         const id = req.params.id;
-        const result = await deleteNotificationService(id, req.user);
+        const result = req.user ? await deleteNotificationService(id, req.user) : await deleteNotificationService(id);
 
         return res.status(200).json({
             success: true,

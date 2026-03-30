@@ -4,24 +4,12 @@ const {
     uploadFileToBucket,
     deleteFileFromBucket,
 } = require("../utils/supabaseBucket");
-const { ensureAdminScope, isAdmin, isMechanic } = require("./scope.service");
-
-const applyMaintenanceScope = (request, user) => {
-    if (isAdmin(user)) {
-        return request.eq("admin_id", ensureAdminScope(user));
-    }
-
-    if (isMechanic(user)) {
-        return request.eq("mechanic_id", user.id);
-    }
-
-    return request;
-};
+const { ensureAdminScope } = require("./scope.service");
 
 const createMaintenancesService = async (data, user) => {
     const payload = { ...data };
 
-    if (isAdmin(user)) {
+    if (user?.role === "ADMIN") {
         payload.admin_id = ensureAdminScope(user);
     }
 
@@ -46,32 +34,24 @@ const getAllMaintenancesService = async (query = {}, user) => {
         .from("maintenances")
         .select("*", { count: "exact" });
 
-    request = applyMaintenanceScope(request, user);
-
-    if (query.vehicle_id) {
-        request = request.eq("vehicle_id", query.vehicle_id);
+    if (user?.role === "ADMIN") {
+        request = request.eq("admin_id", ensureAdminScope(user));
     }
 
-    if (query.mechanic_id) {
-        request = request.eq("mechanic_id", query.mechanic_id);
+    if (user?.role === "MECHANIC") {
+        request = request.eq("mechanic_id", user.id);
     }
 
-    if (query.status) {
-        request = request.eq("status", query.status);
-    }
-
-    if (query.type) {
-        request = request.ilike("type", `%${query.type}%`);
-    }
+    if (query.vehicle_id) request = request.eq("vehicle_id", query.vehicle_id);
+    if (query.mechanic_id) request = request.eq("mechanic_id", query.mechanic_id);
+    if (query.status) request = request.eq("status", query.status);
+    if (query.type) request = request.ilike("type", `%${query.type}%`);
 
     request = request.order("created_at", { ascending: false });
     request = request.range(from, to);
 
     const { data, error, count } = await request;
-
-    if (error) {
-        throw error;
-    }
+    if (error) throw error;
 
     return {
         data,
@@ -85,63 +65,47 @@ const getAllMaintenancesService = async (query = {}, user) => {
 };
 
 const getMaintenancesByIdService = async (id, user) => {
-    if (!id) {
-        throw new Error("id is required");
+    if (!id) throw new Error("id is required");
+
+    let request = supabase.from("maintenances").select("*").eq("id", id);
+
+    if (user?.role === "ADMIN") {
+        request = request.eq("admin_id", ensureAdminScope(user));
     }
 
-    let request = supabase
-        .from("maintenances")
-        .select("*")
-        .eq("id", id);
-
-    request = applyMaintenanceScope(request, user);
+    if (user?.role === "MECHANIC") {
+        request = request.eq("mechanic_id", user.id);
+    }
 
     const { data, error } = await request.maybeSingle();
-
-    if (error) {
-        throw error;
-    }
-
+    if (error) throw error;
     return data || null;
 };
 
 const updateMaintenancesService = async (id, data, user) => {
-    if (!id) {
-        throw new Error("id is required");
+    if (!id) throw new Error("id is required");
+
+    let request = supabase.from("maintenances").update(data).eq("id", id);
+
+    if (user?.role === "ADMIN") {
+        request = request.eq("admin_id", ensureAdminScope(user));
     }
 
-    let request = supabase
-        .from("maintenances")
-        .update(data)
-        .eq("id", id);
-
-    request = applyMaintenanceScope(request, user);
-
-    const { data: result, error } = await request
-        .select()
-        .single();
-
-    if (error) {
-        throw error;
+    if (user?.role === "MECHANIC") {
+        request = request.eq("mechanic_id", user.id);
     }
 
+    const { data: result, error } = await request.select().single();
+    if (error) throw error;
     return result;
 };
 
 const uploadMaintenancesReceiptService = async ({ maintenanceId, file, user }) => {
-    if (!maintenanceId) {
-        throw new Error("maintenanceId is required");
-    }
-
-    if (!file) {
-        throw new Error("file is required");
-    }
+    if (!maintenanceId) throw new Error("maintenanceId is required");
+    if (!file) throw new Error("file is required");
 
     const maintenance = await getMaintenancesByIdService(maintenanceId, user);
-
-    if (!maintenance) {
-        throw new Error("Maintenance not found");
-    }
+    if (!maintenance) throw new Error("Maintenance not found");
 
     if (maintenance.receipt_path) {
         await deleteFileFromBucket({
@@ -166,41 +130,28 @@ const uploadMaintenancesReceiptService = async ({ maintenanceId, file, user }) =
         receipt_path: uploaded.filePath || uploaded.path || null,
     };
 
-    let request = supabase
-        .from("maintenances")
-        .update(payload)
-        .eq("id", maintenanceId);
+    let request = supabase.from("maintenances").update(payload).eq("id", maintenanceId);
 
-    request = applyMaintenanceScope(request, user);
-
-    const { data, error } = await request
-        .select("*")
-        .single();
-
-    if (error) {
-        throw error;
+    if (user?.role === "ADMIN") {
+        request = request.eq("admin_id", ensureAdminScope(user));
     }
 
-    return {
-        maintenance: data,
-        file: uploaded,
-    };
+    if (user?.role === "MECHANIC") {
+        request = request.eq("mechanic_id", user.id);
+    }
+
+    const { data, error } = await request.select("*").single();
+    if (error) throw error;
+
+    return { maintenance: data, file: uploaded };
 };
 
 const deleteMaintenanceReceiptService = async (maintenanceId, user) => {
-    if (!maintenanceId) {
-        throw new Error("maintenanceId is required");
-    }
+    if (!maintenanceId) throw new Error("maintenanceId is required");
 
     const maintenance = await getMaintenancesByIdService(maintenanceId, user);
-
-    if (!maintenance) {
-        throw new Error("Maintenance not found");
-    }
-
-    if (!maintenance.receipt_path) {
-        throw new Error("receipt not found");
-    }
+    if (!maintenance) throw new Error("Maintenance not found");
+    if (!maintenance.receipt_path) throw new Error("receipt not found");
 
     await deleteFileFromBucket({
         bucket: "maintenances_receipts",
@@ -209,57 +160,42 @@ const deleteMaintenanceReceiptService = async (maintenanceId, user) => {
 
     let request = supabase
         .from("maintenances")
-        .update({
-            receipt_url: null,
-            receipt_path: null,
-        })
+        .update({ receipt_url: null, receipt_path: null })
         .eq("id", maintenanceId);
 
-    request = applyMaintenanceScope(request, user);
-
-    const { data, error } = await request
-        .select("*")
-        .single();
-
-    if (error) {
-        throw error;
+    if (user?.role === "ADMIN") {
+        request = request.eq("admin_id", ensureAdminScope(user));
     }
 
-    return {
-        maintenance: data,
-    };
+    if (user?.role === "MECHANIC") {
+        request = request.eq("mechanic_id", user.id);
+    }
+
+    const { data, error } = await request.select("*").single();
+    if (error) throw error;
+
+    return { maintenance: data };
 };
 
 const deleteMaintenanceService = async (id, user) => {
-    if (!id) {
-        throw new Error("id is required");
-    }
+    if (!id) throw new Error("id is required");
 
     const maintenance = await getMaintenancesByIdService(id, user);
+    if (!maintenance) throw new Error("Maintenance not found");
 
-    if (!maintenance) {
-        throw new Error("Maintenance not found");
-    }
-
-    if (maintenance?.receipt_path) {
+    if (maintenance.receipt_path) {
         await deleteFileFromBucket({
             bucket: "maintenances_receipts",
             filePath: maintenance.receipt_path,
         });
     }
 
-    let request = supabase
-        .from("maintenances")
-        .delete()
-        .eq("id", id);
-
-    request = applyMaintenanceScope(request, user);
+    let request = supabase.from("maintenances").delete().eq("id", id);
+    if (user?.role === "ADMIN") request = request.eq("admin_id", ensureAdminScope(user));
+    if (user?.role === "MECHANIC") request = request.eq("mechanic_id", user.id);
 
     const { error } = await request;
-
-    if (error) {
-        throw error;
-    }
+    if (error) throw error;
 
     return { success: true };
 };

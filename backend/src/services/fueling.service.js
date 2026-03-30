@@ -4,20 +4,12 @@ const {
     uploadFileToBucket,
     deleteFileFromBucket,
 } = require("../utils/supabaseBucket");
-const { ensureAdminScope, isAdmin } = require("./scope.service");
-
-const applyFuelingScope = (request, user) => {
-    if (isAdmin(user)) {
-        return request.eq("admin_id", ensureAdminScope(user));
-    }
-
-    return request;
-};
+const { ensureAdminScope } = require("./scope.service");
 
 const createFuelingService = async (data, user) => {
     const payload = { ...data };
 
-    if (isAdmin(user)) {
+    if (user?.role === "ADMIN") {
         payload.admin_id = ensureAdminScope(user);
     }
 
@@ -42,28 +34,19 @@ const getAllFuelingsService = async (query = {}, user) => {
         .from("fuelings")
         .select("*", { count: "exact" });
 
-    request = applyFuelingScope(request, user);
-
-    if (query.vehicle_id) {
-        request = request.eq("vehicle_id", query.vehicle_id);
+    if (user?.role === "ADMIN") {
+        request = request.eq("admin_id", ensureAdminScope(user));
     }
 
-    if (query.fuel_type) {
-        request = request.eq("fuel_type", query.fuel_type);
-    }
-
-    if (query.station) {
-        request = request.ilike("station", `%${query.station}%`);
-    }
+    if (query.vehicle_id) request = request.eq("vehicle_id", query.vehicle_id);
+    if (query.fuel_type) request = request.eq("fuel_type", query.fuel_type);
+    if (query.station) request = request.ilike("station", `%${query.station}%`);
 
     request = request.order("created_at", { ascending: false });
     request = request.range(from, to);
 
     const { data, error, count } = await request;
-
-    if (error) {
-        throw error;
-    }
+    if (error) throw error;
 
     return {
         data,
@@ -86,14 +69,12 @@ const getFuelingByIdService = async (id, user) => {
         .select("*")
         .eq("id", id);
 
-    request = applyFuelingScope(request, user);
-
-    const { data, error } = await request.maybeSingle();
-
-    if (error) {
-        throw error;
+    if (user?.role === "ADMIN") {
+        request = request.eq("admin_id", ensureAdminScope(user));
     }
 
+    const { data, error } = await request.maybeSingle();
+    if (error) throw error;
     return data || null;
 };
 
@@ -102,38 +83,23 @@ const updateFuelingService = async (id, data, user) => {
         throw new Error("id is required");
     }
 
-    let request = supabase
-        .from("fuelings")
-        .update(data)
-        .eq("id", id);
+    let request = supabase.from("fuelings").update(data).eq("id", id);
 
-    request = applyFuelingScope(request, user);
-
-    const { data: result, error } = await request
-        .select()
-        .single();
-
-    if (error) {
-        throw error;
+    if (user?.role === "ADMIN") {
+        request = request.eq("admin_id", ensureAdminScope(user));
     }
 
+    const { data: result, error } = await request.select().single();
+    if (error) throw error;
     return result;
 };
 
 const uploadFuelingReceiptService = async ({ fuelingId, file, user }) => {
-    if (!fuelingId) {
-        throw new Error("fuelingId is required");
-    }
-
-    if (!file) {
-        throw new Error("file is required");
-    }
+    if (!fuelingId) throw new Error("fuelingId is required");
+    if (!file) throw new Error("file is required");
 
     const fueling = await getFuelingByIdService(fuelingId, user);
-
-    if (!fueling) {
-        throw new Error("Fueling not found");
-    }
+    if (!fueling) throw new Error("Fueling not found");
 
     if (fueling.receipt_path) {
         await deleteFileFromBucket({
@@ -158,41 +124,23 @@ const uploadFuelingReceiptService = async ({ fuelingId, file, user }) => {
         receipt_path: uploaded.filePath || uploaded.path || null,
     };
 
-    let request = supabase
-        .from("fuelings")
-        .update(payload)
-        .eq("id", fuelingId);
-
-    request = applyFuelingScope(request, user);
-
-    const { data, error } = await request
-        .select("*")
-        .single();
-
-    if (error) {
-        throw error;
+    let request = supabase.from("fuelings").update(payload).eq("id", fuelingId);
+    if (user?.role === "ADMIN") {
+        request = request.eq("admin_id", ensureAdminScope(user));
     }
 
-    return {
-        fueling: data,
-        file: uploaded,
-    };
+    const { data, error } = await request.select("*").single();
+    if (error) throw error;
+
+    return { fueling: data, file: uploaded };
 };
 
 const deleteFuelingReceiptService = async (fuelingId, user) => {
-    if (!fuelingId) {
-        throw new Error("fuelingId is required");
-    }
+    if (!fuelingId) throw new Error("fuelingId is required");
 
     const fueling = await getFuelingByIdService(fuelingId, user);
-
-    if (!fueling) {
-        throw new Error("Fueling not found");
-    }
-
-    if (!fueling.receipt_path) {
-        throw new Error("receipt not found");
-    }
+    if (!fueling) throw new Error("Fueling not found");
+    if (!fueling.receipt_path) throw new Error("receipt not found");
 
     await deleteFileFromBucket({
         bucket: "fuelings_receipts",
@@ -207,51 +155,36 @@ const deleteFuelingReceiptService = async (fuelingId, user) => {
         })
         .eq("id", fuelingId);
 
-    request = applyFuelingScope(request, user);
-
-    const { data, error } = await request
-        .select("*")
-        .single();
-
-    if (error) {
-        throw error;
+    if (user?.role === "ADMIN") {
+        request = request.eq("admin_id", ensureAdminScope(user));
     }
 
-    return {
-        fueling: data,
-    };
+    const { data, error } = await request.select("*").single();
+    if (error) throw error;
+
+    return { fueling: data };
 };
 
 const deleteFuelingService = async (id, user) => {
-    if (!id) {
-        throw new Error("id is required");
-    }
+    if (!id) throw new Error("id is required");
 
     const fueling = await getFuelingByIdService(id, user);
+    if (!fueling) throw new Error("Fueling not found");
 
-    if (!fueling) {
-        throw new Error("Fueling not found");
-    }
-
-    if (fueling?.receipt_path) {
+    if (fueling.receipt_path) {
         await deleteFileFromBucket({
             bucket: "fuelings_receipts",
             filePath: fueling.receipt_path,
         });
     }
 
-    let request = supabase
-        .from("fuelings")
-        .delete()
-        .eq("id", id);
-
-    request = applyFuelingScope(request, user);
+    let request = supabase.from("fuelings").delete().eq("id", id);
+    if (user?.role === "ADMIN") {
+        request = request.eq("admin_id", ensureAdminScope(user));
+    }
 
     const { error } = await request;
-
-    if (error) {
-        throw error;
-    }
+    if (error) throw error;
 
     return { success: true };
 };

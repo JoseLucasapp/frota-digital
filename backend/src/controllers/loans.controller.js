@@ -13,11 +13,11 @@ const createLoanController = async (req, res) => {
         if (!data.start_date || !data.vehicle_id || !data.driver_id) {
             return res.status(400).json({
                 success: false,
-                message: "start_date, vehicle_id and driver_id are required",
+                message: "start_date, end_date, reason, vehicle_id and driver_id are required",
             });
         }
 
-        const result = await createLoansService(data, req.user);
+        const result = req.user ? await createLoansService(data, req.user) : await createLoansService(data);
         return res.status(201).json(result);
     } catch (error) {
         return res.status(error.statusCode || 500).json({ success: false, message: error.message });
@@ -26,7 +26,7 @@ const createLoanController = async (req, res) => {
 
 const getAllLoansController = async (req, res) => {
     try {
-        const result = await getAllLoansService(req.query, req.user);
+        const result = req.user ? await getAllLoansService(req.query, req.user) : await getAllLoansService(req.query);
         return res.status(200).json(result);
     } catch (error) {
         return res.status(error.statusCode || 500).json({ success: false, message: error.message });
@@ -36,7 +36,7 @@ const getAllLoansController = async (req, res) => {
 const getLoanByIdController = async (req, res) => {
     try {
         const id = req.params.id;
-        const result = await getLoanByIdService(id, req.user);
+        const result = req.user ? await getLoanByIdService(id, req.user) : await getLoanByIdService(id);
 
         if (!result) {
             return res.status(404).json({
@@ -58,7 +58,7 @@ const updateLoanController = async (req, res) => {
     try {
         const id = req.params.id;
         const data = req.body;
-        const result = await updateLoanService(id, data, req.user);
+        const result = req.user ? await updateLoanService(id, data, req.user) : await updateLoanService(id, data);
 
         return res.status(200).json({
             success: true,
@@ -72,7 +72,7 @@ const updateLoanController = async (req, res) => {
 const deleteLoanController = async (req, res) => {
     try {
         const id = req.params.id;
-        const result = await deleteLoanService(id, req.user);
+        const result = req.user ? await deleteLoanService(id, req.user) : await deleteLoanService(id);
 
         return res.status(200).json({
             success: true,

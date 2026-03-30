@@ -26,7 +26,7 @@ const createVehicleController = async (req, res) => {
             });
         }
 
-        const result = await createVehicleService(data, req.user);
+        const result = req.user ? await createVehicleService(data, req.user) : await createVehicleService(data);
         res.status(201).json(result);
     } catch (error) {
         res.status(error.statusCode || 500).json({ success: false, message: error.message });
@@ -36,7 +36,7 @@ const createVehicleController = async (req, res) => {
 const getAllVehiclesController = async (req, res) => {
     try {
         const query = req.query;
-        const result = await getAllVehiclesService(query, req.user);
+        const result = req.user ? await getAllVehiclesService(query, req.user) : await getAllVehiclesService(query);
         res.status(200).json(result);
     } catch (error) {
         res.status(error.statusCode || 500).json({ success: false, message: error.message });
@@ -46,7 +46,7 @@ const getAllVehiclesController = async (req, res) => {
 const getVehicleByIdController = async (req, res) => {
     try {
         const id = req.params.id;
-        const result = await getVehicleByIdService(id, req.user);
+        const result = req.user ? await getVehicleByIdService(id, req.user) : await getVehicleByIdService(id);
 
         if (!result) {
             return res.status(404).json({
@@ -68,7 +68,7 @@ const updateVehicleController = async (req, res) => {
     try {
         const id = req.params.id;
         const data = req.body;
-        const result = await updateVehicleService(id, data, req.user);
+        const result = req.user ? await updateVehicleService(id, data, req.user) : await updateVehicleService(id, data);
 
         return res.status(200).json({
             success: true,
@@ -82,7 +82,7 @@ const updateVehicleController = async (req, res) => {
 const deleteVehicleController = async (req, res) => {
     try {
         const id = req.params.id;
-        const result = await deleteVehicleService(id, req.user);
+        const result = req.user ? await deleteVehicleService(id, req.user) : await deleteVehicleService(id);
 
         return res.status(200).json({
             success: true,

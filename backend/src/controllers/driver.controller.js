@@ -19,7 +19,7 @@ const createDriverController = async (req, res) => {
       });
     }
 
-    const result = await createDriverService(data, req.user);
+    const result = req.user ? await createDriverService(data, req.user) : await createDriverService(data);
     res.status(201).json(result);
   } catch (error) {
     res.status(error.statusCode || 500).json({ success: false, message: error.message });
@@ -28,7 +28,7 @@ const createDriverController = async (req, res) => {
 
 const getAllDriversController = async (req, res) => {
   try {
-    const result = await getAllDriversService(req.query, req.user);
+    const result = req.user ? await getAllDriversService(req.query, req.user) : await getAllDriversService(req.query);
     return res.status(200).json(result);
   } catch (error) {
     return res.status(error.statusCode || 500).json({ success: false, message: error.message });
@@ -38,7 +38,7 @@ const getAllDriversController = async (req, res) => {
 const getDriverByIdController = async (req, res) => {
   try {
     const id = req.params.id;
-    const result = await getDriverByIdService(id, req.user);
+    const result = req.user ? await getDriverByIdService(id, req.user) : await getDriverByIdService(id);
 
     if (!result) {
       return res.status(404).json({
@@ -60,7 +60,7 @@ const updateDriverController = async (req, res) => {
   try {
     const id = req.params.id;
     const data = req.body || {};
-    const result = await updateDriverService(id, data, req.user);
+    const result = req.user ? await updateDriverService(id, data, req.user) : await updateDriverService(id, data);
 
     return res.status(200).json({
       success: true,
@@ -86,7 +86,7 @@ const uploadDriverDocumentController = async (req, res) => {
       driverId: id,
       documentType,
       file: req.file,
-      user: req.user,
+      ...(req.user ? { user: req.user } : {}),
     });
 
     return res.status(200).json({
@@ -114,7 +114,7 @@ const deleteDriverDocumentController = async (req, res) => {
     const result = await deleteDriverDocumentService({
       driverId: id,
       documentType,
-      user: req.user,
+      ...(req.user ? { user: req.user } : {}),
     });
 
     return res.status(200).json({
@@ -139,7 +139,7 @@ const deleteDriverDocumentController = async (req, res) => {
 const deleteDriverController = async (req, res) => {
   try {
     const id = req.params.id;
-    const result = await deleteDriverService(id, req.user);
+    const result = req.user ? await deleteDriverService(id, req.user) : await deleteDriverService(id);
 
     return res.status(200).json({
       success: true,

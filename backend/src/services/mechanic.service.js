@@ -7,11 +7,7 @@ const {
   uploadFileToBucket,
   deleteFileFromBucket,
 } = require("../utils/supabaseBucket");
-const {
-  ensureAdminScope,
-  isAdmin,
-  isMechanic,
-} = require("./scope.service");
+const { ensureAdminScope } = require("./scope.service");
 
 const DOCUMENT_TYPE_MAP = {
   cnpj: {
@@ -31,26 +27,15 @@ const DOCUMENT_TYPE_MAP = {
   },
 };
 
-const applyMechanicScope = (request, user) => {
-  if (isAdmin(user)) {
-    return request.eq("admin_id", ensureAdminScope(user));
-  }
-
-  if (isMechanic(user)) {
-    return request.eq("id", user.id);
-  }
-
-  return request;
-};
-
 const createMechanicService = async (data, user) => {
-  const adminId = ensureAdminScope(user);
-
   const payload = {
     ...data,
-    admin_id: adminId,
     status: MECHANIC_STATUS.ACTIVE,
   };
+
+  if (user?.role === "ADMIN") {
+    payload.admin_id = ensureAdminScope(user);
+  }
 
   const { data: result, error } = await supabase
     .from("mechanics")
@@ -80,7 +65,9 @@ const getAllMechanicsService = async (query = {}, user) => {
     .from("mechanics")
     .select("*", { count: "exact" });
 
-  request = applyMechanicScope(request, user);
+  if (user?.role === "ADMIN") {
+    request = request.eq("admin_id", ensureAdminScope(user));
+  }
 
   if (query.cnpj) {
     request = request.eq("cnpj", query.cnpj);
@@ -131,7 +118,13 @@ const getMechanicByIdService = async (id, user) => {
     .select("*")
     .eq("id", id);
 
-  request = applyMechanicScope(request, user);
+  if (user?.role === "ADMIN") {
+    request = request.eq("admin_id", ensureAdminScope(user));
+  }
+
+  if (user?.role === "MECHANIC") {
+    request = request.eq("id", user.id);
+  }
 
   const { data, error } = await request.maybeSingle();
 
@@ -163,7 +156,13 @@ const updateMechanicService = async (id, data, user) => {
     .update(data)
     .eq("id", id);
 
-  request = applyMechanicScope(request, user);
+  if (user?.role === "ADMIN") {
+    request = request.eq("admin_id", ensureAdminScope(user));
+  }
+
+  if (user?.role === "MECHANIC") {
+    request = request.eq("id", user.id);
+  }
 
   const { data: result, error } = await request
     .select()
@@ -177,29 +176,15 @@ const updateMechanicService = async (id, data, user) => {
 };
 
 const uploadMechanicDocumentService = async ({ mechanicId, documentType, file, user }) => {
-  if (!mechanicId) {
-    throw new Error("mechanicId is required");
-  }
-
-  if (!documentType) {
-    throw new Error("documentType is required");
-  }
-
-  if (!file) {
-    throw new Error("file is required");
-  }
+  if (!mechanicId) throw new Error("mechanicId is required");
+  if (!documentType) throw new Error("documentType is required");
+  if (!file) throw new Error("file is required");
 
   const documentConfig = DOCUMENT_TYPE_MAP[documentType];
-
-  if (!documentConfig) {
-    throw new Error("invalid document type");
-  }
+  if (!documentConfig) throw new Error("invalid document type");
 
   const mechanic = await getMechanicByIdService(mechanicId, user);
-
-  if (!mechanic) {
-    throw new Error("Mechanic not found");
-  }
+  if (!mechanic) throw new Error("Mechanic not found");
 
   if (mechanic[documentConfig.pathField]) {
     await deleteFileFromBucket({
@@ -229,49 +214,32 @@ const uploadMechanicDocumentService = async ({ mechanicId, documentType, file, u
     .update(payload)
     .eq("id", mechanicId);
 
-  request = applyMechanicScope(request, user);
-
-  const { data, error } = await request
-    .select("*")
-    .single();
-
-  if (error) {
-    throw error;
+  if (user?.role === "ADMIN") {
+    request = request.eq("admin_id", ensureAdminScope(user));
   }
 
-  return {
-    mechanic: data,
-    documentType,
-    file: uploaded,
-  };
+  if (user?.role === "MECHANIC") {
+    request = request.eq("id", user.id);
+  }
+
+  const { data, error } = await request.select("*").single();
+  if (error) throw error;
+
+  return { mechanic: data, documentType, file: uploaded };
 };
 
 const deleteMechanicDocumentService = async ({ mechanicId, documentType, user }) => {
-  if (!mechanicId) {
-    throw new Error("mechanicId is required");
-  }
-
-  if (!documentType) {
-    throw new Error("documentType is required");
-  }
+  if (!mechanicId) throw new Error("mechanicId is required");
+  if (!documentType) throw new Error("documentType is required");
 
   const documentConfig = DOCUMENT_TYPE_MAP[documentType];
-
-  if (!documentConfig) {
-    throw new Error("invalid document type");
-  }
+  if (!documentConfig) throw new Error("invalid document type");
 
   const mechanic = await getMechanicByIdService(mechanicId, user);
-
-  if (!mechanic) {
-    throw new Error("Mechanic not found");
-  }
+  if (!mechanic) throw new Error("Mechanic not found");
 
   const existingPath = mechanic[documentConfig.pathField];
-
-  if (!existingPath) {
-    throw new Error("document not found");
-  }
+  if (!existingPath) throw new Error("document not found");
 
   await deleteFileFromBucket({
     bucket: "documents",
@@ -288,42 +256,32 @@ const deleteMechanicDocumentService = async ({ mechanicId, documentType, user })
     .update(payload)
     .eq("id", mechanicId);
 
-  request = applyMechanicScope(request, user);
-
-  const { data, error } = await request
-    .select("*")
-    .single();
-
-  if (error) {
-    throw error;
+  if (user?.role === "ADMIN") {
+    request = request.eq("admin_id", ensureAdminScope(user));
   }
 
-  return {
-    mechanic: data,
-    documentType,
-  };
+  if (user?.role === "MECHANIC") {
+    request = request.eq("id", user.id);
+  }
+
+  const { data, error } = await request.select("*").single();
+  if (error) throw error;
+
+  return { mechanic: data, documentType };
 };
 
 const deleteMechanicService = async (id, user) => {
-  if (!id) {
-    throw new Error("id is required");
+  if (!id) throw new Error("id is required");
+
+  let request = supabase.from("mechanics").delete().eq("id", id);
+  if (user?.role === "ADMIN") {
+    const existing = await getMechanicByIdService(id, user);
+    if (!existing) throw new Error("Mechanic not found");
+    request = request.eq("admin_id", existing.admin_id);
   }
 
-  const existing = await getMechanicByIdService(id, user);
-
-  if (!existing) {
-    throw new Error("Mechanic not found");
-  }
-
-  const { error } = await supabase
-    .from("mechanics")
-    .delete()
-    .eq("id", id)
-    .eq("admin_id", existing.admin_id);
-
-  if (error) {
-    throw error;
-  }
+  const { error } = await request;
+  if (error) throw error;
 
   return { success: true };
 };

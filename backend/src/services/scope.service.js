@@ -15,6 +15,10 @@ const applyAdminScope = (request, adminId) => {
     return request.eq("admin_id", adminId);
 };
 
+module.exports = {
+    ensureAdminScope,
+    applyAdminScope,
+};
 const getScopedVehicleIds = async (adminId) => {
     const { data, error } = await supabase
         .from("vehicles")

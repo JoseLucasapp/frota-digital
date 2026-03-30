@@ -27,7 +27,7 @@ const createFuelingController = async (req, res) => {
             });
         }
 
-        const result = await createFuelingService(data, req.user);
+        const result = req.user ? await createFuelingService(data, req.user) : await createFuelingService(data);
         return res.status(201).json(result);
     } catch (error) {
         return res.status(error.statusCode || 500).json({ success: false, message: error.message });
@@ -36,7 +36,7 @@ const createFuelingController = async (req, res) => {
 
 const getAllFuelingsController = async (req, res) => {
     try {
-        const result = await getAllFuelingsService(req.query, req.user);
+        const result = req.user ? await getAllFuelingsService(req.query, req.user) : await getAllFuelingsService(req.query);
         return res.status(200).json(result);
     } catch (error) {
         return res.status(error.statusCode || 500).json({ success: false, message: error.message });
@@ -46,7 +46,7 @@ const getAllFuelingsController = async (req, res) => {
 const getFuelingByIdController = async (req, res) => {
     try {
         const id = req.params.id;
-        const result = await getFuelingByIdService(id, req.user);
+        const result = req.user ? await getFuelingByIdService(id, req.user) : await getFuelingByIdService(id);
 
         if (!result) {
             return res.status(404).json({
@@ -68,7 +68,7 @@ const updateFuelingController = async (req, res) => {
     try {
         const id = req.params.id;
         const data = req.body;
-        const result = await updateFuelingService(id, data, req.user);
+        const result = req.user ? await updateFuelingService(id, data, req.user) : await updateFuelingService(id, data);
 
         return res.status(200).json({
             success: true,
@@ -93,7 +93,7 @@ const uploadFuelingReceiptController = async (req, res) => {
         const result = await uploadFuelingReceiptService({
             fuelingId: id,
             file: req.file,
-            user: req.user,
+            ...(req.user ? { user: req.user } : {}),
         });
 
         return res.status(200).json({
@@ -118,7 +118,7 @@ const deleteFuelingReceiptController = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const result = await deleteFuelingReceiptService(id, req.user);
+        const result = req.user ? await deleteFuelingReceiptService(id, req.user) : await deleteFuelingReceiptService(id);
 
         return res.status(200).json({
             success: true,
@@ -141,7 +141,7 @@ const deleteFuelingReceiptController = async (req, res) => {
 const deleteFuelingController = async (req, res) => {
     try {
         const id = req.params.id;
-        const result = await deleteFuelingService(id, req.user);
+        const result = req.user ? await deleteFuelingService(id, req.user) : await deleteFuelingService(id);
 
         return res.status(200).json({
             success: true,

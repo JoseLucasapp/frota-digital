@@ -1,18 +1,10 @@
 const supabase = require("../config/supabase");
-const { ensureAdminScope, isAdmin } = require("./scope.service");
-
-const applyNotificationScope = (request, user) => {
-    if (isAdmin(user)) {
-        return request.eq("admin_id", ensureAdminScope(user));
-    }
-
-    return request;
-};
+const { ensureAdminScope } = require("./scope.service");
 
 const createNotificationsService = async (data, user) => {
     const payload = { ...data };
 
-    if (isAdmin(user)) {
+    if (user?.role === "ADMIN") {
         payload.admin_id = ensureAdminScope(user);
     }
 
@@ -38,24 +30,22 @@ const getAllNotificationsService = async (query = {}, user) => {
         .from("notifications")
         .select("*", { count: "exact" });
 
-    request = applyNotificationScope(request, user);
-
-    if (query.driver_id) {
-        request = request.eq("driver_id", query.driver_id);
+    if (user?.role === "ADMIN") {
+        request = request.eq("admin_id", ensureAdminScope(user));
     }
 
-    if (query.admin_id) {
-        request = request.eq("admin_id", query.admin_id);
+    if (user?.role === "DRIVER") {
+        request = request.eq("driver_id", user.id);
     }
+
+    if (query.driver_id) request = request.eq("driver_id", query.driver_id);
+    if (query.admin_id) request = request.eq("admin_id", query.admin_id);
 
     request = request.order("created_at", { ascending: sortOrder });
     request = request.range(from, to);
 
     const { data, error, count } = await request;
-
-    if (error) {
-        throw error;
-    }
+    if (error) throw error;
 
     return {
         data,
@@ -69,67 +59,38 @@ const getAllNotificationsService = async (query = {}, user) => {
 };
 
 const getNotificationByIdService = async (id, user) => {
-    if (!id) {
-        throw new Error("id is required");
-    }
+    if (!id) throw new Error("id is required");
 
-    let request = supabase
-        .from("notifications")
-        .select("*")
-        .eq("id", id);
-
-    request = applyNotificationScope(request, user);
+    let request = supabase.from("notifications").select("*").eq("id", id);
+    if (user?.role === "ADMIN") request = request.eq("admin_id", ensureAdminScope(user));
+    if (user?.role === "DRIVER") request = request.eq("driver_id", user.id);
 
     const { data, error } = await request.maybeSingle();
-
-    if (error) {
-        throw error;
-    }
-
+    if (error) throw error;
     return data || null;
 };
 
 const updateNotificationService = async (id, data, user) => {
-    if (!id) {
-        throw new Error("id is required");
-    }
+    if (!id) throw new Error("id is required");
 
-    let request = supabase
-        .from("notifications")
-        .update(data)
-        .eq("id", id);
+    let request = supabase.from("notifications").update(data).eq("id", id);
+    if (user?.role === "ADMIN") request = request.eq("admin_id", ensureAdminScope(user));
+    if (user?.role === "DRIVER") request = request.eq("driver_id", user.id);
 
-    request = applyNotificationScope(request, user);
-
-    const { data: result, error } = await request
-        .select()
-        .single();
-
-    if (error) {
-        throw error;
-    }
-
+    const { data: result, error } = await request.select().single();
+    if (error) throw error;
     return result;
 };
 
 const deleteNotificationService = async (id, user) => {
-    if (!id) {
-        throw new Error("id is required");
-    }
+    if (!id) throw new Error("id is required");
 
-    let request = supabase
-        .from("notifications")
-        .delete()
-        .eq("id", id);
-
-    request = applyNotificationScope(request, user);
+    let request = supabase.from("notifications").delete().eq("id", id);
+    if (user?.role === "ADMIN") request = request.eq("admin_id", ensureAdminScope(user));
+    if (user?.role === "DRIVER") request = request.eq("driver_id", user.id);
 
     const { error } = await request;
-
-    if (error) {
-        throw error;
-    }
-
+    if (error) throw error;
     return { success: true };
 };
 

@@ -4,8 +4,8 @@ const createAdminController = async (req, res) => {
   try {
     const data = req.body;
 
-    if (!data.name || !data.email || !data.password || !data.phone || !data.institution || !data.cnpj) {
-      return res.status(400).json({ success: false, message: 'Nome, email, senha, telefone, instituição e CNPJ são obrigatórios' });
+    if (!data.name || !data.email || !data.password || !data.institution || !data.cnpj) {
+      return res.status(400).json({ success: false, message: 'Name, email, password, institution and cnpj are required' });
     }
 
     const result = await createAdminService(data);

@@ -19,7 +19,7 @@ const createMechanicController = async (req, res) => {
       });
     }
 
-    const result = await createMechanicService(data, req.user);
+    const result = req.user ? await createMechanicService(data, req.user) : await createMechanicService(data);
     return res.status(201).json(result);
   } catch (error) {
     return res.status(error.statusCode || 500).json({ success: false, message: error.message });
@@ -28,7 +28,7 @@ const createMechanicController = async (req, res) => {
 
 const getAllMechanicsController = async (req, res) => {
   try {
-    const result = await getAllMechanicsService(req.query, req.user);
+    const result = req.user ? await getAllMechanicsService(req.query, req.user) : await getAllMechanicsService(req.query);
     return res.status(200).json(result);
   } catch (error) {
     return res.status(error.statusCode || 500).json({ success: false, message: error.message });
@@ -38,7 +38,7 @@ const getAllMechanicsController = async (req, res) => {
 const getMechanicByIdController = async (req, res) => {
   try {
     const id = req.params.id;
-    const result = await getMechanicByIdService(id, req.user);
+    const result = req.user ? await getMechanicByIdService(id, req.user) : await getMechanicByIdService(id);
 
     if (!result) {
       return res.status(404).json({
@@ -60,7 +60,7 @@ const updateMechanicController = async (req, res) => {
   try {
     const id = req.params.id;
     const data = req.body || {};
-    const result = await updateMechanicService(id, data, req.user);
+    const result = req.user ? await updateMechanicService(id, data, req.user) : await updateMechanicService(id, data);
 
     return res.status(200).json({
       success: true,
@@ -86,7 +86,7 @@ const uploadMechanicDocumentController = async (req, res) => {
       mechanicId: id,
       documentType,
       file: req.file,
-      user: req.user,
+      ...(req.user ? { user: req.user } : {}),
     });
 
     return res.status(200).json({
@@ -114,7 +114,7 @@ const deleteMechanicDocumentController = async (req, res) => {
     const result = await deleteMechanicDocumentService({
       mechanicId: id,
       documentType,
-      user: req.user,
+      ...(req.user ? { user: req.user } : {}),
     });
 
     return res.status(200).json({
@@ -139,7 +139,7 @@ const deleteMechanicDocumentController = async (req, res) => {
 const deleteMechanicController = async (req, res) => {
   try {
     const id = req.params.id;
-    const result = await deleteMechanicService(id, req.user);
+    const result = req.user ? await deleteMechanicService(id, req.user) : await deleteMechanicService(id);
 
     return res.status(200).json({
       success: true,
