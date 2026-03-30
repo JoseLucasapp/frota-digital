@@ -6,11 +6,35 @@ const {
 } = require("../utils/supabaseBucket");
 const { ensureAdminScope } = require("./scope.service");
 
+const resolveFuelingAdminId = async (data, user) => {
+    if (user?.role === "ADMIN") {
+        return ensureAdminScope(user);
+    }
+
+    if (user?.role === "DRIVER" && data?.vehicle_id) {
+        const { data: vehicle, error } = await supabase
+            .from("vehicles")
+            .select("id, admin_id")
+            .eq("id", data.vehicle_id)
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!vehicle) {
+            throw new Error("Vehicle not found");
+        }
+
+        return vehicle.admin_id || null;
+    }
+
+    return null;
+};
+
 const createFuelingService = async (data, user) => {
     const payload = { ...data };
+    const adminId = await resolveFuelingAdminId(data, user);
 
-    if (user?.role === "ADMIN") {
-        payload.admin_id = ensureAdminScope(user);
+    if (adminId) {
+        payload.admin_id = adminId;
     }
 
     const { data: result, error } = await supabase
