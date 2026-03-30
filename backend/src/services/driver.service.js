@@ -46,12 +46,15 @@ const createDriverService = async (data, user) => {
   if (user?.role === "ADMIN") {
     payload.admin_id = ensureAdminScope(user);
   }
-
-  if (payload.password) {
-    payload.password_hash = await hashPassword(payload.password);
-    payload.is_first_acc = false;
+  if ("password" in payload) {
+    if (payload.password) {
+      payload.password_hash = await hashPassword(payload.password);
+      payload.is_first_acc = false;
+    }
     delete payload.password;
   }
+
+  console.log("CREATE DRIVER PAYLOAD", payload);
 
   const { data: result, error } = await supabase
     .from("drivers")
