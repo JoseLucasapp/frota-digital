@@ -90,6 +90,44 @@ const updateVehicleService = async (id, data, user) => {
 const deleteVehicleService = async (id, user) => {
     if (!id) throw new Error("id is required");
 
+    const vehicle = await getVehicleByIdService(id, user);
+    if (!vehicle) {
+        const error = new Error("Veículo não encontrado");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    const [
+        loansCheck,
+        fuelingsCheck,
+        maintenancesCheck,
+        issuesCheck,
+    ] = await Promise.all([
+        supabase.from("loans").select("id", { count: "exact", head: true }).eq("vehicle_id", id),
+        supabase.from("fuelings").select("id", { count: "exact", head: true }).eq("vehicle_id", id),
+        supabase.from("maintenances").select("id", { count: "exact", head: true }).eq("vehicle_id", id),
+        supabase.from("vehicle_issues").select("id", { count: "exact", head: true }).eq("vehicle_id", id),
+    ]);
+
+    if (loansCheck.error) throw loansCheck.error;
+    if (fuelingsCheck.error) throw fuelingsCheck.error;
+    if (maintenancesCheck.error) throw maintenancesCheck.error;
+    if (issuesCheck.error) throw issuesCheck.error;
+
+    const blockers = [];
+    if ((loansCheck.count || 0) > 0) blockers.push("empréstimos");
+    if ((fuelingsCheck.count || 0) > 0) blockers.push("abastecimentos");
+    if ((maintenancesCheck.count || 0) > 0) blockers.push("manutenções");
+    if ((issuesCheck.count || 0) > 0) blockers.push("ocorrências");
+
+    if (blockers.length > 0) {
+        const error = new Error(
+            `Não é possível excluir este veículo porque ele possui ${blockers.join(", ")} vinculados.`
+        );
+        error.statusCode = 409;
+        throw error;
+    }
+
     let request = supabase.from("vehicles").delete().eq("id", id);
 
     if (user?.role === "ADMIN") {
