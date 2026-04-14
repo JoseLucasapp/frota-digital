@@ -25,6 +25,41 @@ const documentConfig: Array<{
     { key: "identifier", label: "Documento complementar", urlField: "identifier_file_url", pathField: "identifier_file_path" },
   ];
 
+const statusConfig: Record<
+  DocumentStatus,
+  {
+    label: string;
+    className: string;
+    icon: JSX.Element;
+  }
+> = {
+  approved: {
+    label: "Aprovado",
+    className: "bg-success/20 text-success border-0 gap-1",
+    icon: <CheckCircle className="w-3 h-3" />,
+  },
+  pending_review: {
+    label: "Em análise",
+    className: "bg-info/20 text-info border-0 gap-1",
+    icon: <Clock3 className="w-3 h-3" />,
+  },
+  missing: {
+    label: "Pendente",
+    className: "bg-warning/20 text-warning border-0 gap-1",
+    icon: <AlertTriangle className="w-3 h-3" />,
+  },
+  expired: {
+    label: "Vencido",
+    className: "bg-destructive/20 text-destructive border-0 gap-1",
+    icon: <AlertTriangle className="w-3 h-3" />,
+  },
+  rejected: {
+    label: "Recusado",
+    className: "bg-destructive/20 text-destructive border-0 gap-1",
+    icon: <XCircle className="w-3 h-3" />,
+  },
+};
+
 const DriverDocuments = () => {
   const authUser = getAuthUser();
   const token = getAuthToken();
