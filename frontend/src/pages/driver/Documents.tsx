@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, FileText, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle, Clock3, FileText, Upload, XCircle } from "lucide-react";
 import { api, ApiError, API_BASE } from "@/lib/api";
 import { getAuthUser, getAuthToken, setAuthSession } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
