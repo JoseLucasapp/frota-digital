@@ -27,13 +27,27 @@ const swaggerOptions = {
       title: "Frota Digital API",
       version: "1.0.0",
     },
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+        },
+      },
+    },
+    security: [
+      {
+        bearerAuth: [],
+      },
+    ],
     servers: [
       {
         url: `http://localhost:${port}/api`,
       },
     ],
   },
-  apis: [path.join(__dirname, "routes/*.js")], // ✅ correto
+  apis: [path.join(__dirname, "routes/*.js")],
 };
 
 const swaggerSpec = swaggerJSDoc(swaggerOptions);
@@ -46,7 +60,4 @@ router.get("/", (req, res) => {
 
 require('./routes')(router);
 
-
-app.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`);
-});
+module.exports = app;

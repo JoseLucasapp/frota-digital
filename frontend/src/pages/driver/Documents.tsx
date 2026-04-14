@@ -1,86 +1,29 @@
+import { useEffect, useState } from "react";
+import { ArrowLeft, FileText, Upload } from "lucide-react";
+import { api, ApiError, API_BASE } from "@/lib/api";
+import { getAuthUser, getAuthToken, setAuthSession } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import {
-  ArrowLeft,
-  FileText,
-  Upload,
-  CheckCircle,
-  AlertTriangle,
-  Clock3,
-  XCircle,
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
-type DocumentStatus =
-  | "approved"
-  | "pending_review"
-  | "missing"
-  | "expired"
-  | "rejected";
+type DocKey =
+  | "cpf"
+  | "rg"
+  | "cnh"
+  | "home_doc"
+  | "identifier";
 
-interface DriverDocument {
-  id: string;
-  name: string;
-  status: DocumentStatus;
-  expiry: string | null;
-  uploaded: boolean;
-  fileName: string | null;
-  uploadedAt: string | null;
-  note?: string;
-}
-
-const documents: DriverDocument[] = [
-  {
-    id: "1",
-    name: "CNH",
-    status: "expired",
-    expiry: "15/06/2025",
-    uploaded: true,
-    fileName: "cnh_jose_lucas_frente.pdf",
-    uploadedAt: "12/05/2025 às 14:32",
-    note: "Documento vencido. Envie uma CNH atualizada.",
-  },
-  {
-    id: "2",
-    name: "RG",
-    status: "approved",
-    expiry: null,
-    uploaded: true,
-    fileName: "rg_jose_lucas.jpg",
-    uploadedAt: "10/02/2026 às 09:14",
-    note: "Documento aprovado pela administração.",
-  },
-  {
-    id: "3",
-    name: "CPF",
-    status: "pending_review",
-    expiry: null,
-    uploaded: true,
-    fileName: "cpf_jose_lucas.pdf",
-    uploadedAt: "04/03/2026 às 18:41",
-    note: "Documento enviado e aguardando validação do administrador.",
-  },
-  {
-    id: "4",
-    name: "Comprovante de Residência",
-    status: "missing",
-    expiry: null,
-    uploaded: false,
-    fileName: null,
-    uploadedAt: null,
-    note: "Envie um comprovante recente dos últimos 90 dias.",
-  },
-  {
-    id: "5",
-    name: "Foto do Perfil / Crachá",
-    status: "rejected",
-    expiry: null,
-    uploaded: true,
-    fileName: "foto_perfil_borrada.png",
-    uploadedAt: "01/03/2026 às 11:20",
-    note: "Arquivo recusado: imagem borrada. Envie uma foto mais nítida.",
-  },
-];
+const documentConfig: Array<{
+  key: DocKey;
+  label: string;
+  urlField: string;
+  pathField: string;
+}> = [
+    { key: "cpf", label: "CPF", urlField: "cpf_file_url", pathField: "cpf_file_path" },
+    { key: "rg", label: "RG", urlField: "rg_file_url", pathField: "rg_file_path" },
+    { key: "cnh", label: "CNH", urlField: "cnh_file_url", pathField: "cnh_file_path" },
+    { key: "home_doc", label: "Comprovante de residência", urlField: "home_doc_file_url", pathField: "home_doc_file_path" },
+    { key: "identifier", label: "Documento complementar", urlField: "identifier_file_url", pathField: "identifier_file_path" },
+  ];
 
 const statusConfig: Record<
   DocumentStatus,
@@ -118,92 +61,181 @@ const statusConfig: Record<
 };
 
 const DriverDocuments = () => {
+  const authUser = getAuthUser();
+  const token = getAuthToken();
   const navigate = useNavigate();
 
+  const [driver, setDriver] = useState<any>(authUser || {});
+  const [files, setFiles] = useState<Record<string, File | null>>({});
+  const [loadingKey, setLoadingKey] = useState<string | null>(null);
+  const [bootLoading, setBootLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const loadDriver = async () => {
+    if (!authUser?.id) return;
+
+    try {
+      setBootLoading(true);
+      setError(null);
+
+      const response = await api.get<{ data: any[] }>("/driver", { limit: 200 });
+      const current = (response.data || []).find((item) => item.id === authUser.id);
+
+      if (current) {
+        setDriver(current);
+
+        if (token) {
+          setAuthSession(token, {
+            ...authUser,
+            ...current,
+          } as any);
+        }
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erro ao carregar documentos");
+    } finally {
+      setBootLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDriver();
+  }, [authUser?.id]);
+
+  const uploadDocumentToBackend = async (docType: DocKey, file: File) => {
+    if (!authUser?.id) {
+      throw new Error("Motorista não identificado");
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(
+      `${API_BASE}/driver/${authUser.id}/document/${docType}`,
+      {
+        method: "POST",
+        headers: token
+          ? {
+            Authorization: `Bearer ${token}`,
+          }
+          : undefined,
+        body: formData,
+      }
+    );
+
+    const text = await response.text();
+    let payload: any = null;
+
+    try {
+      payload = text ? JSON.parse(text) : null;
+    } catch {
+      payload = text;
+    }
+
+    if (!response.ok) {
+      throw new Error(payload?.message || "Erro ao enviar documento");
+    }
+
+    return payload;
+  };
+
+  const uploadDocument = async (item: typeof documentConfig[number]) => {
+    if (!authUser?.id) return;
+
+    const file = files[item.key];
+    if (!file) {
+      setError(`Selecione um arquivo para ${item.label}`);
+      return;
+    }
+
+    try {
+      setLoadingKey(item.key);
+      setError(null);
+      setMessage(null);
+
+      await uploadDocumentToBackend(item.key, file);
+
+      setMessage(`${item.label} enviado com sucesso`);
+      setFiles((current) => ({ ...current, [item.key]: null }));
+      await loadDriver();
+    } catch (err: any) {
+      setError(err instanceof ApiError ? err.message : err?.message || `Erro ao enviar ${item.label}`);
+    } finally {
+      setLoadingKey(item.key);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-background">
-      <header className="gradient-primary p-4 flex items-center gap-3">
-        <button
-          onClick={() => navigate("/driver")}
-          className="text-primary-foreground"
-        >
-          <ArrowLeft className="w-6 h-6" />
-        </button>
-
-        <div>
-          <h1 className="text-xl font-bold text-primary-foreground">
-            Meus Documentos
-          </h1>
-          <p className="text-sm text-primary-foreground/80">
-            Acompanhe envio, validade e aprovação dos seus documentos
-          </p>
+    <div className="min-h-screen bg-background p-4 md:p-8 space-y-6">
+      <div>
+        <div className="flex items-center gap-4 mb-1">
+          <button onClick={() => navigate("/driver")} className="text-foreground">
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <h1 className="text-2xl font-bold text-foreground">Meus Documentos</h1>
         </div>
-      </header>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="p-4 max-w-lg mx-auto space-y-4"
-      >
-        {documents.map((doc) => {
-          const status = statusConfig[doc.status];
-          const actionLabel =
-            doc.status === "missing" ? "Enviar documento" : "Atualizar documento";
+        <p className="text-muted-foreground">Envio e visualização dos documentos do motorista</p>
+      </div>
+
+      {bootLoading ? <div className="glass-card p-4 text-sm text-muted-foreground">Carregando documentos...</div> : null}
+      {error ? <div className="glass-card p-4 text-sm text-destructive">{error}</div> : null}
+      {message ? <div className="glass-card p-4 text-sm text-green-600">{message}</div> : null}
+
+      <div className="grid md:grid-cols-2 gap-6">
+        {documentConfig.map((item) => {
+          const url = driver?.[item.urlField];
 
           return (
-            <div key={doc.id} className="glass-card p-5">
-              <div className="flex items-start justify-between gap-3 mb-4">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center shrink-0">
-                    <FileText className="w-5 h-5 text-info" />
-                  </div>
-
-                  <div className="min-w-0">
-                    <p className="font-semibold text-foreground text-lg leading-tight">
-                      {doc.name}
-                    </p>
-
-                    {doc.expiry && (
-                      <p className="text-sm text-muted-foreground">
-                        Validade: {doc.expiry}
-                      </p>
-                    )}
-
-                    {doc.fileName && (
-                      <p className="text-sm text-muted-foreground truncate">
-                        Arquivo: {doc.fileName}
-                      </p>
-                    )}
-
-                    {doc.uploadedAt && (
-                      <p className="text-xs text-muted-foreground">
-                        Último envio: {doc.uploadedAt}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <Badge className={status.className}>
-                  {status.icon}
-                  {status.label}
-                </Badge>
+            <div key={item.key} className="glass-card p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <FileText className="w-5 h-5 text-primary" />
+                <h2 className="text-lg font-semibold text-foreground">{item.label}</h2>
               </div>
 
-              {doc.note && (
-                <div className="mb-4 rounded-xl bg-secondary/40 border border-border p-3">
-                  <p className="text-sm text-muted-foreground">{doc.note}</p>
-                </div>
+              {url ? (
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm text-primary hover:underline"
+                >
+                  Abrir documento atual
+                </a>
+              ) : (
+                <p className="text-sm text-muted-foreground">Nenhum documento enviado</p>
               )}
 
-              <label className="flex items-center justify-center gap-2 h-12 rounded-xl border border-dashed border-border bg-secondary/30 cursor-pointer hover:border-primary transition-colors">
-                <Upload className="w-5 h-5 text-muted-foreground" />
-                <span className="text-muted-foreground">{actionLabel}</span>
-                <input type="file" accept="image/*,.pdf" className="hidden" />
+              <label className="h-12 px-4 rounded-md border border-border bg-secondary flex items-center gap-3 cursor-pointer">
+                <Upload className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">
+                  {files[item.key]?.name || "Selecionar arquivo"}
+                </span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*,.pdf"
+                  onChange={(e) =>
+                    setFiles((current) => ({
+                      ...current,
+                      [item.key]: e.target.files?.[0] || null,
+                    }))
+                  }
+                />
               </label>
+
+              <Button
+                onClick={() => uploadDocument(item)}
+                disabled={loadingKey === item.key}
+                className="w-full h-12 text-base gradient-primary text-primary-foreground"
+              >
+                {loadingKey === item.key ? "Enviando..." : `Enviar ${item.label}`}
+              </Button>
             </div>
           );
         })}
-      </motion.div>
+      </div>
     </div>
   );
 };

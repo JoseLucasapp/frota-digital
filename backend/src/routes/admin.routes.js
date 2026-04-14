@@ -1,4 +1,7 @@
-const {createAdminController} = require('../controllers/admin.controller')
+const { createAdminController, getAllAdminsController } = require('../controllers/admin.controller');
+const { attachUser } = require('../middlewares/attachUser.middleware');
+const { requireRole } = require('../security/role.guard');
+const { requireAuth } = require('../utils/jwt');
 
 module.exports = (router) => {
   /**
@@ -37,7 +40,7 @@ module.exports = (router) => {
    *                 type: string
    *                 example: 12.345.678/0001-90
    *     responses:
-   *       200:
+   *       201:
    *         description: Success
    *       400:
    *         description: Bad Request
@@ -49,4 +52,46 @@ module.exports = (router) => {
     "/admin",
     async (req, res) => await createAdminController(req, res),
   );
+
+  /**
+   * @swagger
+   * /admin:
+   *   get:
+   *     summary: Get all admins with optional filters
+   *     tags: [Admin]
+   *     parameters:
+   *       - in: query
+   *         name: email
+   *         schema:
+   *           type: string
+   *         description: Filter by email
+   *       - in: query
+   *         name: name
+   *         schema:
+   *           type: string
+   *         description: Filter by name (partial match)
+   *       - in: query
+   *         name: cnpj
+   *         schema:
+   *           type: string
+   *         description: Filter by cnpj
+   *       - in: query
+   *         name: institution
+   *         schema:
+   *           type: string
+   *         description: Filter by institution (partial match)
+   *     responses:
+   *       200:
+   *         description: Success
+   *       500:
+   *         description: Internal Server Error
+   */
+  router.get(
+    "/admin",
+    requireAuth,
+    attachUser,
+    requireRole("ADMIN"),
+    async (req, res) => await getAllAdminsController(req, res),
+  );
+
 }

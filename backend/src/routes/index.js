@@ -1,9 +1,21 @@
 const adminRoutes = require("./admin.routes")
+const authRoutes = require("./auth.routes")
 const driverRoutes = require("./driver.routes")
+const fuelingsRoutes = require("./fuelings.routes")
+const loansRoutes = require("./loans.routes")
+const maintenanceRoutes = require("./maintenance.routes")
 const mechanicRoutes = require("./mechanic.routes")
+const notificationsRoutes = require("./notifications.routes")
+const vehicleRoutes = require("./vehicle.routes")
 
-module.exports = (router) =>{
+module.exports = (router) => {
+    authRoutes(router)
     adminRoutes(router)
     mechanicRoutes(router)
     driverRoutes(router)
+    fuelingsRoutes(router)
+    vehicleRoutes(router)
+    loansRoutes(router)
+    notificationsRoutes(router)
+    maintenanceRoutes(router)
 }
