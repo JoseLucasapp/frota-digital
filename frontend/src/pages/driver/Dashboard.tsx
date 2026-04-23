@@ -9,11 +9,17 @@ import {
   LogOut,
   ChevronRight,
   AlertTriangle,
+  MapPin,
+  LocateFixed,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { clearAuthSession, getAuthUser } from "@/lib/auth";
+import { toast } from "sonner";
 
 const quickActions = [
   { icon: Fuel, label: "Registrar Abastecimento", path: "/driver/fuel", color: "text-warning" },
@@ -21,6 +27,15 @@ const quickActions = [
   { icon: FileText, label: "Meus Documentos", path: "/driver/documents", color: "text-info" },
   { icon: Clock, label: "Histórico", path: "/driver/history", color: "text-primary" },
 ];
+
+type TrackingPayload = {
+  vehicle_id: string;
+  address?: string;
+  notes?: string;
+  latitude?: number;
+  longitude?: number;
+  source?: string;
+};
 
 const DriverDashboard = () => {
   const navigate = useNavigate();
@@ -32,6 +47,9 @@ const DriverDashboard = () => {
   const [maintenances, setMaintenances] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [trackingAddress, setTrackingAddress] = useState("");
+  const [trackingNotes, setTrackingNotes] = useState("");
+  const [savingTracking, setSavingTracking] = useState(false);
 
   useEffect(() => {
     if (user?.is_first_acc !== false) {
@@ -76,6 +94,12 @@ const DriverDashboard = () => {
     return vehicles.find((vehicle) => vehicle.id === currentLoan.vehicle_id) || null;
   }, [currentLoan, vehicles]);
 
+  useEffect(() => {
+    if (currentVehicle?.last_address) {
+      setTrackingAddress(currentVehicle.last_address);
+    }
+  }, [currentVehicle?.id, currentVehicle?.last_address]);
+
   const myFuelings = useMemo(() => {
     if (!currentVehicle?.id) return [];
     return fuelings
@@ -103,8 +127,7 @@ const DriverDashboard = () => {
     if (!item) return null;
 
     const total = Number(
-      item.total_price ||
-      Number(item.liters || 0) * Number(item.price_per_liter || 0)
+      item.total_price || Number(item.liters || 0) * Number(item.price_per_liter || 0)
     );
 
     return {
@@ -166,6 +189,95 @@ const DriverDashboard = () => {
   const handleLogout = () => {
     clearAuthSession();
     navigate("/login", { replace: true });
+  };
+
+  const refreshVehicles = async () => {
+    const vehicleRes = await api.get<{ data: any[] }>("/vehicle", { limit: 200 });
+    setVehicles(vehicleRes.data || []);
+  };
+
+  const saveTracking = async (payload: TrackingPayload) => {
+    if (!currentVehicle?.id) {
+      toast.error("Nenhum veículo vinculado ao motorista.");
+      return;
+    }
+
+    try {
+      setSavingTracking(true);
+      await api.post("/tracking/logs", payload);
+      toast.success("Localização atualizada com sucesso.");
+      setTrackingNotes("");
+      await refreshVehicles();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Erro ao salvar localização");
+    } finally {
+      setSavingTracking(false);
+    }
+  };
+
+  const handleManualTrackingSave = async () => {
+    if (!currentVehicle?.id) {
+      toast.error("Nenhum veículo vinculado ao motorista.");
+      return;
+    }
+
+    if (!trackingAddress.trim()) {
+      toast.error("Informe um endereço ou use a localização do navegador.");
+      return;
+    }
+
+    await saveTracking({
+      vehicle_id: currentVehicle.id,
+      address: trackingAddress.trim(),
+      notes: trackingNotes.trim() || undefined,
+      source: "manual",
+    });
+  };
+
+  const handleBrowserLocation = async () => {
+    if (!currentVehicle?.id) {
+      toast.error("Nenhum veículo vinculado ao motorista.");
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      toast.error("Geolocalização não suportada neste navegador.");
+      return;
+    }
+
+    setSavingTracking(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          await api.post("/tracking/logs", {
+            vehicle_id: currentVehicle.id,
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            address: trackingAddress.trim() || undefined,
+            notes: trackingNotes.trim() || undefined,
+            source: "browser_geolocation",
+          });
+
+          toast.success("Localização capturada pelo navegador.");
+          setTrackingNotes("");
+          await refreshVehicles();
+        } catch (err) {
+          toast.error(err instanceof ApiError ? err.message : "Erro ao salvar localização");
+        } finally {
+          setSavingTracking(false);
+        }
+      },
+      () => {
+        setSavingTracking(false);
+        toast.error("Não foi possível obter sua localização. Você pode preencher manualmente.");
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      },
+    );
   };
 
   return (
@@ -240,102 +352,128 @@ const DriverDashboard = () => {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="grid grid-cols-2 gap-4"
+          transition={{ delay: 0.05 }}
+          className="glass-card p-5 space-y-4"
         >
-          <div className="glass-card p-4">
-            <Fuel className="w-5 h-5 text-warning mb-2" />
-            <p className="text-sm text-muted-foreground">Último Abastecimento</p>
-            <p className="font-bold text-foreground">
-              {lastFuel?.date ? new Date(lastFuel.date).toLocaleDateString("pt-BR") : "—"}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {lastFuel
-                ? `${lastFuel.liters}L • R$ ${lastFuel.cost.toFixed(2)}`
-                : "Sem registros"}
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
+              <MapPin className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <p className="font-bold text-foreground text-lg">Atualizar localização</p>
+              <p className="text-sm text-muted-foreground">Use o navegador ou preencha manualmente</p>
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-secondary/40 p-3 text-sm">
+            <p className="text-muted-foreground">Última localização salva</p>
+            <p className="font-medium text-foreground mt-1">{currentVehicle?.last_address || "Sem endereço informado"}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {currentVehicle?.last_tracked_at
+                ? `Atualizado em ${new Date(currentVehicle.last_tracked_at).toLocaleString("pt-BR")}`
+                : "Nenhuma atualização enviada ainda"}
             </p>
           </div>
 
-          <div className="glass-card p-4">
-            <Wrench className="w-5 h-5 text-info mb-2" />
-            <p className="text-sm text-muted-foreground">Próx. Manutenção</p>
-            <p className="font-bold text-foreground">
-              {nextMaintenance?.dateLabel || "Sem registros"}
-            </p>
-
-            {nextMaintenance?.daysLabel ? (
-              <div className="flex items-center gap-1 mt-1">
-                <AlertTriangle className="w-3 h-3 text-warning" />
-                <p className="text-xs text-warning">{nextMaintenance.daysLabel}</p>
-              </div>
-            ) : null}
+          <div className="space-y-3">
+            <Input
+              value={trackingAddress}
+              onChange={(event) => setTrackingAddress(event.target.value)}
+              placeholder="Endereço atual do veículo"
+              disabled={!currentVehicle || savingTracking}
+            />
+            <Textarea
+              value={trackingNotes}
+              onChange={(event) => setTrackingNotes(event.target.value)}
+              placeholder="Observação opcional"
+              disabled={!currentVehicle || savingTracking}
+            />
           </div>
-        </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          className="space-y-2"
-        >
-          <h2 className="text-lg font-semibold text-foreground px-1">
-            Qual o status do veículo?
-          </h2>
-
-          <div className="bg-card border border-border rounded-2xl p-1.5 shadow-sm flex items-center">
-            <button
-              onClick={() => setStatus("parado")}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl transition-all duration-200 font-bold ${status === "parado"
-                ? "bg-secondary text-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-secondary/30"
-                }`}
-            >
-              Parado
-            </button>
-
-            <button
-              onClick={() => setStatus("uso")}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl transition-all duration-200 font-bold ${status === "uso"
-                ? "bg-success text-white shadow-lg"
-                : "text-muted-foreground hover:bg-secondary/30"
-                }`}
-            >
-              <div
-                className={`w-2 h-2 rounded-full bg-white ${status === "uso" ? "animate-pulse" : "hidden"
-                  }`}
-              />
-              Em Uso
-            </button>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Button onClick={handleBrowserLocation} disabled={!currentVehicle || savingTracking} className="w-full">
+              <LocateFixed className="w-4 h-4 mr-2" />
+              Usar minha localização
+            </Button>
+            <Button onClick={handleManualTrackingSave} disabled={!currentVehicle || savingTracking} variant="outline" className="w-full">
+              <MapPin className="w-4 h-4 mr-2" />
+              Salvar manualmente
+            </Button>
           </div>
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="space-y-2"
-        >
-          <h2 className="text-lg font-semibold text-foreground">
-            Ações Rápidas
-          </h2>
-
-          {quickActions.map((action) => (
-            <button
+        <div className="grid gap-3">
+          {quickActions.map((action, index) => (
+            <motion.button
               key={action.path}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 + index * 0.05 }}
               onClick={() => navigate(action.path)}
-              className="w-full glass-card p-4 flex items-center gap-4 hover:border-primary/50 transition-all"
+              className="glass-card p-4 flex items-center gap-4 text-left w-full hover:scale-[1.01] transition-all"
             >
               <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
                 <action.icon className={`w-6 h-6 ${action.color}`} />
               </div>
-
-              <span className="text-lg font-medium text-foreground flex-1 text-left">
-                {action.label}
-              </span>
-
+              <div className="flex-1">
+                <p className="font-semibold text-foreground">{action.label}</p>
+              </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
-            </button>
+            </motion.button>
           ))}
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="grid gap-4"
+        >
+          <div className="glass-card p-5">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-sm text-muted-foreground">Último Abastecimento</p>
+                <p className="text-lg font-bold text-foreground mt-1">
+                  {lastFuel ? `${lastFuel.liters.toLocaleString("pt-BR")} L` : "Sem registros"}
+                </p>
+              </div>
+              <Fuel className="w-6 h-6 text-warning" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {lastFuel
+                ? `R$ ${lastFuel.cost.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} • ${new Date(lastFuel.date).toLocaleDateString("pt-BR")}`
+                : "Ainda não há abastecimentos vinculados ao seu veículo."}
+            </p>
+          </div>
+
+          <div className="glass-card p-5">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-sm text-muted-foreground">Próxima Manutenção</p>
+                <p className="text-lg font-bold text-foreground mt-1">
+                  {nextMaintenance ? nextMaintenance.dateLabel : "Nenhuma manutenção"}
+                </p>
+              </div>
+              <Wrench className="w-6 h-6 text-info" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {nextMaintenance
+                ? `${nextMaintenance.item.description || "Manutenção pendente"} ${nextMaintenance.daysLabel ? `• ${nextMaintenance.daysLabel}` : ""}`
+                : "Nenhuma manutenção prevista para o seu veículo."}
+            </p>
+          </div>
+
+          <div className="glass-card p-5 border border-warning/30 bg-warning/5">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-warning mt-0.5" />
+              <div>
+                <p className="font-semibold text-foreground">Lembrete</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Atualize sua localização pelo menos a cada 2 horas enquanto estiver com o veículo.
+                </p>
+              </div>
+            </div>
+          </div>
         </motion.div>
       </div>
     </div>
