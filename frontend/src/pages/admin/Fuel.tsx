@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { api, ApiError } from "@/lib/api";
+import { FUEL_TYPE_OPTIONS } from "@/lib/vehicleCatalog";
 
 const initialForm = {
   vehicle_id: "",
@@ -58,10 +59,26 @@ const AdminFuel = () => {
     load();
   }, []);
 
+
   const vehicleById = useMemo(
     () => Object.fromEntries(vehicles.map((vehicle) => [vehicle.id, vehicle])),
     [vehicles]
   );
+
+  useEffect(() => {
+    if (!form.vehicle_id) return;
+    const selectedVehicle = vehicleById[form.vehicle_id];
+    if (!selectedVehicle) return;
+
+    setForm((current: typeof initialForm) => ({
+      ...current,
+      fuel_type: selectedVehicle.fuel_type || current.fuel_type,
+      current_km:
+        selectedVehicle.current_km != null && selectedVehicle.current_km !== ""
+          ? String(selectedVehicle.current_km)
+          : current.current_km,
+    }));
+  }, [form.vehicle_id, vehicleById]);
 
   const filtered = useMemo(
     () =>
@@ -265,11 +282,18 @@ const AdminFuel = () => {
 
               <div className="space-y-2">
                 <Label>{fieldLabels.fuel_type}</Label>
-                <Input
+                <select
                   value={String(form.fuel_type ?? "")}
                   onChange={(e) => setForm((current: any) => ({ ...current, fuel_type: e.target.value }))}
-                  className="h-12 bg-secondary border-border"
-                />
+                  className="h-12 w-full rounded-md bg-secondary border border-border px-3 text-sm text-foreground"
+                >
+                  <option value="">Selecione o combustível</option>
+                  {FUEL_TYPE_OPTIONS.map((fuelType) => (
+                    <option key={fuelType} value={fuelType}>
+                      {fuelType}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-2">
