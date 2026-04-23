@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
+import { FUEL_TYPE_OPTIONS } from "@/lib/vehicleCatalog";
 
 const initialForm = {
   liters: "",
@@ -174,13 +175,20 @@ const DriverFuelPage = () => {
           <h2 className="text-lg font-semibold text-foreground">Novo abastecimento</h2>
 
           <div className="space-y-2">
-            <Label>Combustível</Label>
-            <Input
-              value={form.fuel_type}
-              onChange={(e) => setForm((current) => ({ ...current, fuel_type: e.target.value }))}
-              className="h-12 bg-secondary border-border"
-            />
-          </div>
+  <Label>Combustível</Label>
+  <select
+    value={form.fuel_type}
+    onChange={(e) => setForm((current) => ({ ...current, fuel_type: e.target.value }))}
+    className="h-12 w-full rounded-md bg-secondary border border-border px-3 text-sm text-foreground"
+  >
+    <option value="">Selecione o combustível</option>
+    {FUEL_TYPE_OPTIONS.map((fuelType) => (
+      <option key={fuelType} value={fuelType}>
+        {fuelType}
+      </option>
+    ))}
+  </select>
+</div>
 
           <div className="space-y-2">
             <Label>Litros</Label>

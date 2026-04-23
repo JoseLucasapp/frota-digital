@@ -72,10 +72,7 @@ const AdminProfile = () => {
 
       const payload: any = {
         name: form.name,
-        email: form.email,
         phone: form.phone,
-        institution: form.institution,
-        cnpj: form.cnpj,
       };
 
       if (form.password) {
@@ -170,9 +167,11 @@ const AdminProfile = () => {
                 <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={form.email}
-                  onChange={(e) => setForm((current) => ({ ...current, email: e.target.value }))}
-                  className="pl-10 h-12 bg-secondary border-border"
+                  readOnly
+                  disabled
+                  className="pl-10 h-12 bg-secondary border-border opacity-70"
                 />
+                <p className="text-xs text-muted-foreground">Email bloqueado para edição.</p>
               </div>
             </div>
 
@@ -194,9 +193,11 @@ const AdminProfile = () => {
                 <Building2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={form.institution}
-                  onChange={(e) => setForm((current) => ({ ...current, institution: e.target.value }))}
-                  className="pl-10 h-12 bg-secondary border-border"
+                  readOnly
+                  disabled
+                  className="pl-10 h-12 bg-secondary border-border opacity-70"
                 />
+                <p className="text-xs text-muted-foreground">Instituição bloqueada para edição.</p>
               </div>
             </div>
 
@@ -204,9 +205,11 @@ const AdminProfile = () => {
               <Label>CNPJ</Label>
               <Input
                 value={form.cnpj}
-                onChange={(e) => setForm((current) => ({ ...current, cnpj: e.target.value }))}
-                className="h-12 bg-secondary border-border"
+                readOnly
+                disabled
+                className="h-12 bg-secondary border-border opacity-70"
               />
+              <p className="text-xs text-muted-foreground">CNPJ bloqueado para edição.</p>
             </div>
 
             <div className="space-y-2">

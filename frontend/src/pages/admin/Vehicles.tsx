@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { api, ApiError } from "@/lib/api";
+import { getAvailableMakes, getAvailableModels, getAvailableYears, getCatalogFuelType } from "@/lib/vehicleCatalog";
 
 const initialForm = {
   plate: "",
@@ -41,6 +42,8 @@ const vehicleStatusOptions = [
   { value: "maintenance", label: "Em manutenção" },
   { value: "inactive", label: "Inativo" },
 ];
+
+const normalizeText = (value?: string) => String(value || "").trim().toLowerCase();
 
 const getStatusLabel = (status?: string) =>
   vehicleStatusOptions.find((item) => item.value === status)?.label || status || "—";
@@ -108,6 +111,40 @@ const AdminVehicles = () => {
     });
     return map;
   }, [drivers]);
+
+
+  const availableMakes = useMemo(
+    () => getAvailableMakes(vehicles.map((vehicle) => String(vehicle.make || ""))),
+    [vehicles]
+  );
+
+  const availableYears = useMemo(
+    () => getAvailableYears(form.make, vehicles.filter((vehicle) => normalizeText(vehicle.make) === normalizeText(form.make)).map((vehicle) => vehicle.year)),
+    [form.make, vehicles]
+  );
+
+  const availableModels = useMemo(
+    () =>
+      getAvailableModels(
+        form.make,
+        form.year,
+        vehicles
+          .filter(
+            (vehicle) =>
+              normalizeText(vehicle.make) === normalizeText(form.make) &&
+              (!form.year || Number(vehicle.year) === Number(form.year))
+          )
+          .map((vehicle) => String(vehicle.model || ""))
+      ),
+    [form.make, form.year, vehicles]
+  );
+
+  useEffect(() => {
+    const nextFuelType = getCatalogFuelType(form.make, form.year, form.model);
+    if (nextFuelType && nextFuelType !== form.fuel_type) {
+      setForm((current: typeof initialForm) => ({ ...current, fuel_type: nextFuelType }));
+    }
+  }, [form.make, form.year, form.model]);
 
   const filtered = useMemo(
     () =>
@@ -403,18 +440,112 @@ const AdminVehicles = () => {
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
-              {["plate", "make", "model", "year", "fuel_type", "current_km"].map((key) => (
-                <div key={key} className="space-y-2">
-                  <Label>{fieldLabels[key] || key}</Label>
-                  <Input
-                    value={String(form[key] ?? "")}
-                    onChange={(e) =>
-                      setForm((current: any) => ({ ...current, [key]: e.target.value }))
-                    }
-                    className="h-12 bg-secondary border-border"
-                  />
-                </div>
-              ))}
+              <div className="space-y-2">
+                <Label>{fieldLabels.plate}</Label>
+                <Input
+                  value={form.plate}
+                  onChange={(e) => setForm((current: typeof initialForm) => ({ ...current, plate: e.target.value }))}
+                  className="h-12 bg-secondary border-border"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>{fieldLabels.make}</Label>
+                <Input
+                  list="vehicle-makes"
+                  value={form.make}
+                  onChange={(e) => {
+                    const nextMake = e.target.value;
+                    setForm((current: typeof initialForm) => ({
+                      ...current,
+                      make: nextMake,
+                      year: normalizeText(current.make) === normalizeText(nextMake) ? current.year : "",
+                      model: normalizeText(current.make) === normalizeText(nextMake) ? current.model : "",
+                      fuel_type: "",
+                    }));
+                  }}
+                  className="h-12 bg-secondary border-border"
+                  placeholder="Digite ou selecione a marca"
+                />
+                <datalist id="vehicle-makes">
+                  {availableMakes.map((make) => (
+                    <option key={make} value={make} />
+                  ))}
+                </datalist>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{fieldLabels.year}</Label>
+                <Select
+                  value={form.year || "placeholder"}
+                  onValueChange={(value) =>
+                    setForm((current: typeof initialForm) => ({
+                      ...current,
+                      year: value === "placeholder" ? "" : value,
+                      model: "",
+                      fuel_type: "",
+                    }))
+                  }
+                  disabled={!form.make}
+                >
+                  <SelectTrigger className="h-12 bg-secondary border-border">
+                    <SelectValue placeholder="Selecione o ano" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="placeholder" disabled>
+                      Selecione o ano
+                    </SelectItem>
+                    {availableYears.map((year) => (
+                      <SelectItem key={year} value={String(year)}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{fieldLabels.model}</Label>
+                <Select
+                  value={form.model || "placeholder"}
+                  onValueChange={(value) =>
+                    setForm((current: typeof initialForm) => ({
+                      ...current,
+                      model: value === "placeholder" ? "" : value,
+                    }))
+                  }
+                  disabled={!form.make || !form.year}
+                >
+                  <SelectTrigger className="h-12 bg-secondary border-border">
+                    <SelectValue placeholder="Selecione o modelo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="placeholder" disabled>
+                      Selecione o modelo
+                    </SelectItem>
+                    {availableModels.map((model) => (
+                      <SelectItem key={model} value={model}>
+                        {model}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{fieldLabels.fuel_type}</Label>
+                <Input value={form.fuel_type} readOnly className="h-12 bg-secondary border-border opacity-80" />
+              </div>
+
+              <div className="space-y-2">
+                <Label>{fieldLabels.current_km}</Label>
+                <Input
+                  type="number"
+                  value={form.current_km}
+                  onChange={(e) => setForm((current: typeof initialForm) => ({ ...current, current_km: e.target.value }))}
+                  className="h-12 bg-secondary border-border"
+                />
+              </div>
 
               <div className="space-y-2">
                 <Label>{fieldLabels.status}</Label>

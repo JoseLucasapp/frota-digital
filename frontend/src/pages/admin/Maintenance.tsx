@@ -6,13 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { api, ApiError } from "@/lib/api";
+import { MAINTENANCE_PRIORITY_OPTIONS, MAINTENANCE_TYPE_OPTIONS } from "@/lib/vehicleCatalog";
 
 const initialForm = {
   vehicle_id: "",
   mechanic_id: "",
   type: "",
   description: "",
-  priority: "",
+  priority: "MEDIUM",
   estimated_cost: "",
   status: "PENDING",
 };
@@ -270,20 +271,33 @@ const AdminMaintenance = () => {
 
               <div className="space-y-2">
                 <Label>{fieldLabels.type}</Label>
-                <Input
+                <select
                   value={String(form.type ?? "")}
                   onChange={(e) => setForm((current: any) => ({ ...current, type: e.target.value }))}
-                  className="h-12 bg-secondary border-border"
-                />
+                  className="h-12 w-full rounded-md bg-secondary border border-border px-3 text-sm text-foreground"
+                >
+                  <option value="">Selecione o tipo</option>
+                  {MAINTENANCE_TYPE_OPTIONS.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-2">
                 <Label>{fieldLabels.priority}</Label>
-                <Input
-                  value={String(form.priority ?? "")}
+                <select
+                  value={String(form.priority ?? "MEDIUM")}
                   onChange={(e) => setForm((current: any) => ({ ...current, priority: e.target.value }))}
-                  className="h-12 bg-secondary border-border"
-                />
+                  className="h-12 w-full rounded-md bg-secondary border border-border px-3 text-sm text-foreground"
+                >
+                  {MAINTENANCE_PRIORITY_OPTIONS.map((priority) => (
+                    <option key={priority.value} value={priority.value}>
+                      {priority.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-2 md:col-span-2">
