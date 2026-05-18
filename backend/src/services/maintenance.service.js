@@ -6,11 +6,30 @@ const {
 } = require("../utils/supabaseBucket");
 const { ensureAdminScope } = require("./scope.service");
 
+const resolveMaintenanceAdminId = async (data, user) => {
+    if (user?.role === "ADMIN") return ensureAdminScope(user);
+
+    if (data?.vehicle_id) {
+        const { data: vehicle, error } = await supabase
+            .from("vehicles")
+            .select("id, admin_id")
+            .eq("id", data.vehicle_id)
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!vehicle) throw new Error("Veículo não encontrado");
+        return vehicle.admin_id || null;
+    }
+
+    return null;
+};
+
 const createMaintenancesService = async (data, user) => {
     const payload = { ...data };
+    const adminId = await resolveMaintenanceAdminId(data, user);
 
-    if (user?.role === "ADMIN") {
-        payload.admin_id = ensureAdminScope(user);
+    if (adminId) {
+        payload.admin_id = adminId;
     }
 
     const { data: result, error } = await supabase
@@ -20,6 +39,19 @@ const createMaintenancesService = async (data, user) => {
         .single();
 
     if (error) throw error;
+
+    if (user?.role === "DRIVER" && result?.admin_id) {
+        await supabase.from("notifications").insert({
+            admin_id: result.admin_id,
+            driver_id: user.id,
+            type: "maintenance",
+            title: "Problema reportado pelo motorista",
+            message: `${result.type || "Manutenção"}: ${result.description || "Sem descrição"}`,
+            read: false,
+            is_read: false,
+        });
+    }
+
     return result;
 };
 
@@ -40,6 +72,25 @@ const getAllMaintenancesService = async (query = {}, user) => {
 
     if (user?.role === "MECHANIC") {
         request = request.eq("mechanic_id", user.id);
+    }
+
+    if (user?.role === "DRIVER") {
+        const { data: loans, error: loansError } = await supabase
+            .from("loans")
+            .select("vehicle_id")
+            .eq("driver_id", user.id);
+
+        if (loansError) throw loansError;
+        const vehicleIds = [...new Set((loans || []).map((loan) => loan.vehicle_id).filter(Boolean))];
+
+        if (vehicleIds.length === 0) {
+            return {
+                data: [],
+                pagination: { page, limit, total: 0, totalPages: 0 },
+            };
+        }
+
+        request = request.in("vehicle_id", vehicleIds);
     }
 
     if (query.vehicle_id) request = request.eq("vehicle_id", query.vehicle_id);
@@ -65,7 +116,7 @@ const getAllMaintenancesService = async (query = {}, user) => {
 };
 
 const getMaintenancesByIdService = async (id, user) => {
-    if (!id) throw new Error("id is required");
+    if (!id) throw new Error("ID é obrigatório.");
 
     let request = supabase.from("maintenances").select("*").eq("id", id);
 
@@ -83,7 +134,7 @@ const getMaintenancesByIdService = async (id, user) => {
 };
 
 const updateMaintenancesService = async (id, data, user) => {
-    if (!id) throw new Error("id is required");
+    if (!id) throw new Error("ID é obrigatório.");
 
     let request = supabase.from("maintenances").update(data).eq("id", id);
 
@@ -101,11 +152,11 @@ const updateMaintenancesService = async (id, data, user) => {
 };
 
 const uploadMaintenancesReceiptService = async ({ maintenanceId, file, user }) => {
-    if (!maintenanceId) throw new Error("maintenanceId is required");
-    if (!file) throw new Error("file is required");
+    if (!maintenanceId) throw new Error("ID da manutenção é obrigatório.");
+    if (!file) throw new Error("Arquivo é obrigatório.");
 
     const maintenance = await getMaintenancesByIdService(maintenanceId, user);
-    if (!maintenance) throw new Error("Maintenance not found");
+    if (!maintenance) throw new Error("Manutenção não encontrada");
 
     if (maintenance.receipt_path) {
         await deleteFileFromBucket({
@@ -147,11 +198,11 @@ const uploadMaintenancesReceiptService = async ({ maintenanceId, file, user }) =
 };
 
 const deleteMaintenanceReceiptService = async (maintenanceId, user) => {
-    if (!maintenanceId) throw new Error("maintenanceId is required");
+    if (!maintenanceId) throw new Error("ID da manutenção é obrigatório.");
 
     const maintenance = await getMaintenancesByIdService(maintenanceId, user);
-    if (!maintenance) throw new Error("Maintenance not found");
-    if (!maintenance.receipt_path) throw new Error("receipt not found");
+    if (!maintenance) throw new Error("Manutenção não encontrada");
+    if (!maintenance.receipt_path) throw new Error("Comprovante não encontrado");
 
     await deleteFileFromBucket({
         bucket: "maintenances_receipts",
@@ -178,10 +229,10 @@ const deleteMaintenanceReceiptService = async (maintenanceId, user) => {
 };
 
 const deleteMaintenanceService = async (id, user) => {
-    if (!id) throw new Error("id is required");
+    if (!id) throw new Error("ID é obrigatório.");
 
     const maintenance = await getMaintenancesByIdService(id, user);
-    if (!maintenance) throw new Error("Maintenance not found");
+    if (!maintenance) throw new Error("Manutenção não encontrada");
 
     if (maintenance.receipt_path) {
         await deleteFileFromBucket({

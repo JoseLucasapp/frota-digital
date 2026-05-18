@@ -1,11 +1,45 @@
 const supabase = require("../config/supabase");
 const { ensureAdminScope } = require("./scope.service");
 
+const resolveNotificationAdminId = async (payload, user) => {
+    if (payload.admin_id) return payload.admin_id;
+    if (user?.role === "ADMIN") return ensureAdminScope(user);
+
+    if (user?.role === "DRIVER") {
+        const { data, error } = await supabase
+            .from("drivers")
+            .select("admin_id")
+            .eq("id", user.id)
+            .maybeSingle();
+
+        if (error) throw error;
+        return data?.admin_id || null;
+    }
+
+    if (user?.role === "MECHANIC") {
+        const { data, error } = await supabase
+            .from("mechanics")
+            .select("admin_id")
+            .eq("id", user.id)
+            .maybeSingle();
+
+        if (error) throw error;
+        return data?.admin_id || null;
+    }
+
+    return null;
+};
+
 const createNotificationsService = async (data, user) => {
     const payload = { ...data };
+    const adminId = await resolveNotificationAdminId(payload, user);
 
-    if (user?.role === "ADMIN") {
-        payload.admin_id = ensureAdminScope(user);
+    if (adminId) {
+        payload.admin_id = adminId;
+    }
+
+    if (user?.role === "DRIVER" && !payload.driver_id) {
+        payload.driver_id = user.id;
     }
 
     const { data: result, error } = await supabase

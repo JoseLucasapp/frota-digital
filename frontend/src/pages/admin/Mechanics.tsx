@@ -24,7 +24,14 @@ const initialForm = {
 
 const mechanicStatusOptions = [
   { value: "active", label: "Ativo" },
+  { value: "maintenance", label: "Em manutenção" },
   { value: "inactive", label: "Inativo" },
+];
+
+const mechanicDocumentLinks = [
+  { label: "CNPJ", field: "cnpj_file_url" },
+  { label: "Licença", field: "business_license_file_url" },
+  { label: "Certificados", field: "certificates_file_url" },
 ];
 
 const AdminMechanics = () => {
@@ -189,6 +196,7 @@ const AdminMechanics = () => {
                   <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Contato</th>
                   <th className="text-left p-4 text-sm font-semibold text-muted-foreground">CNPJ</th>
                   <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Status</th>
+                  <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Documentos</th>
                   <th className="text-right p-4 text-sm font-semibold text-muted-foreground">Ações</th>
                 </tr>
               </thead>
@@ -231,6 +239,27 @@ const AdminMechanics = () => {
                           ))}
                         </SelectContent>
                       </Select>
+                    </td>
+                    <td className="p-4 min-w-[200px]">
+                      <div className="flex flex-wrap gap-2">
+                        {mechanicDocumentLinks.some((doc) => mechanic[doc.field]) ? (
+                          mechanicDocumentLinks.map((doc) =>
+                            mechanic[doc.field] ? (
+                              <a
+                                key={doc.field}
+                                href={mechanic[doc.field]}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="rounded-lg border border-border px-2 py-1 text-xs text-primary hover:bg-secondary"
+                              >
+                                {doc.label}
+                              </a>
+                            ) : null
+                          )
+                        ) : (
+                          <span className="text-sm text-muted-foreground">Sem documentos</span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-4 text-right space-x-2">
                       <Button variant="outline" onClick={() => openEdit(mechanic)}>

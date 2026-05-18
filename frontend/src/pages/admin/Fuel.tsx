@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Search, Plus, Fuel, X } from "lucide-react";
+import { ExternalLink, Search, Plus, Fuel, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { api, ApiError } from "@/lib/api";
 import { FUEL_TYPE_OPTIONS } from "@/lib/vehicleCatalog";
 
@@ -14,6 +15,7 @@ const initialForm = {
   price_per_liter: "",
   current_km: "",
   station: "",
+  notes: "",
 };
 
 const fieldLabels: Record<string, string> = {
@@ -23,6 +25,7 @@ const fieldLabels: Record<string, string> = {
   price_per_liter: "Preço por litro",
   current_km: "Quilometragem atual",
   station: "Posto",
+  notes: "Observação",
 };
 
 const AdminFuel = () => {
@@ -90,6 +93,7 @@ const AdminFuel = () => {
         return (
           !term ||
           String(fueling.station || "").toLowerCase().includes(term) ||
+          String(fueling.notes || "").toLowerCase().includes(term) ||
           String(fueling.fuel_type || "").toLowerCase().includes(term) ||
           String(plate).toLowerCase().includes(term) ||
           String(model).toLowerCase().includes(term)
@@ -113,6 +117,7 @@ const AdminFuel = () => {
       price_per_liter: fueling.price_per_liter || "",
       current_km: fueling.current_km || "",
       station: fueling.station || "",
+      notes: fueling.notes || "",
     });
     setModalOpen(true);
   };
@@ -127,6 +132,7 @@ const AdminFuel = () => {
         liters: Number(form.liters),
         price_per_liter: Number(form.price_per_liter),
         current_km: Number(form.current_km),
+        notes: form.notes?.trim() || undefined,
       };
 
       if (editing) {
@@ -192,6 +198,7 @@ const AdminFuel = () => {
                 <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Litros</th>
                 <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Preço</th>
                 <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Posto</th>
+                <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Notas/Docs</th>
                 <th className="text-right p-4 text-sm font-semibold text-muted-foreground">Ações</th>
               </tr>
             </thead>
@@ -228,6 +235,27 @@ const AdminFuel = () => {
                       R$ {total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                     </td>
                     <td className="p-4 text-foreground">{fueling.station}</td>
+                    <td className="p-4 text-foreground min-w-[220px] max-w-[320px]">
+                      <div className="space-y-2">
+                        {fueling.notes ? (
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{fueling.notes}</p>
+                        ) : (
+                          <span className="block text-sm text-muted-foreground">Sem notas</span>
+                        )}
+
+                        {fueling.receipt_url ? (
+                          <a
+                            href={fueling.receipt_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/15"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            Ver comprovante
+                          </a>
+                        ) : null}
+                      </div>
+                    </td>
                     <td className="p-4 text-right space-x-2">
                       <Button variant="outline" onClick={() => openEdit(fueling)}>
                         Editar
@@ -336,6 +364,16 @@ const AdminFuel = () => {
                   value={String(form.station ?? "")}
                   onChange={(e) => setForm((current: any) => ({ ...current, station: e.target.value }))}
                   className="h-12 bg-secondary border-border"
+                />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label>{fieldLabels.notes}</Label>
+                <Textarea
+                  value={String(form.notes ?? "")}
+                  onChange={(e) => setForm((current: any) => ({ ...current, notes: e.target.value }))}
+                  placeholder="Observação opcional"
+                  className="min-h-24 bg-secondary border-border"
                 />
               </div>
             </div>

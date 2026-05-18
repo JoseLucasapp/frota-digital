@@ -4,6 +4,7 @@ import { Search, Plus, Wrench, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { api, ApiError } from "@/lib/api";
 import { MAINTENANCE_PRIORITY_OPTIONS, MAINTENANCE_TYPE_OPTIONS } from "@/lib/vehicleCatalog";
@@ -210,7 +211,7 @@ const AdminMaintenance = () => {
                   <Wrench className="w-5 h-5 text-primary" />
                   <div>
                     <p className="font-medium text-foreground">
-                      {item.type || "Manutenção"} — {item.description}
+                      {item.type || "Manutenção"}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       Veículo: {vehicle ? `${vehicle.plate} - ${vehicle.make || ""} ${vehicle.model || ""}` : item.vehicle_id}
@@ -218,6 +219,14 @@ const AdminMaintenance = () => {
                     <p className="text-sm text-muted-foreground">
                       Mecânico: {mechanic ? mechanic.name : item.mechanic_id || "—"}
                     </p>
+                    <p className="mt-2 max-w-2xl text-sm text-muted-foreground whitespace-pre-wrap">
+                      Notas: {item.description || "Sem notas"}
+                    </p>
+                    {item.receipt_url ? (
+                      <a href={item.receipt_url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-primary hover:underline">
+                        Ver comprovante
+                      </a>
+                    ) : null}
                   </div>
                 </div>
 
@@ -326,10 +335,10 @@ const AdminMaintenance = () => {
 
               <div className="space-y-2 md:col-span-2">
                 <Label>{fieldLabels.description}</Label>
-                <Input
+                <Textarea
                   value={String(form.description ?? "")}
                   onChange={(e) => setForm((current: any) => ({ ...current, description: e.target.value }))}
-                  className="h-12 bg-secondary border-border"
+                  className="min-h-24 bg-secondary border-border"
                 />
               </div>
 

@@ -20,7 +20,7 @@ const createMaintenancesController = async (req, res) => {
         ) {
             return res.status(400).json({
                 success: false,
-                message: "vehicle_id, type, status and description are required",
+                message: "Veículo, tipo, status e descrição são obrigatórios.",
             });
         }
 
@@ -54,7 +54,7 @@ const getMaintenancesByIdController = async (req, res) => {
         if (!result) {
             return res.status(404).json({
                 success: false,
-                message: "Maintenance not found",
+                message: "Manutenção não encontrada",
             });
         }
 
@@ -95,7 +95,7 @@ const uploadMaintenancesReceiptController = async (req, res) => {
         if (!req.file) {
             return res.status(400).json({
                 success: false,
-                message: "file is required",
+                message: "Arquivo é obrigatório.",
             });
         }
 
@@ -107,12 +107,12 @@ const uploadMaintenancesReceiptController = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: "Receipt uploaded successfully",
+            message: "Comprovante enviado com sucesso.",
             data: result,
         });
     } catch (error) {
         const status =
-            error.message === "Maintenance not found"
+            error.message === "Manutenção não encontrada"
                 ? 404
                 : error.statusCode || 500;
 
@@ -131,14 +131,14 @@ const deleteMaintenanceReceiptController = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: "Receipt deleted successfully",
+            message: "Comprovante removido com sucesso.",
             data: result,
         });
     } catch (error) {
         let status = error.statusCode || 500;
 
-        if (error.message === "Maintenance not found") status = 404;
-        if (error.message === "receipt not found") status = 404;
+        if (error.message === "Manutenção não encontrada") status = 404;
+        if (error.message === "Comprovante não encontrado") status = 404;
 
         return res.status(status).json({
             success: false,

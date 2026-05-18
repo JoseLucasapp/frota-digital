@@ -5,6 +5,7 @@ import { getAuthUser, getAuthToken } from "@/lib/auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "react-router-dom";
 import { FUEL_TYPE_OPTIONS } from "@/lib/vehicleCatalog";
 
@@ -14,6 +15,18 @@ const initialForm = {
   current_km: "",
   station: "",
   fuel_type: "",
+  notes: "",
+};
+
+const formatFuelingError = (err: unknown, fallback: string) => {
+  if (err instanceof ApiError) return err.message;
+  if (err instanceof Error) return err.message;
+  return fallback;
+};
+
+const isPositiveNumber = (value: string) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0;
 };
 
 const DriverFuelPage = () => {
@@ -55,8 +68,20 @@ const DriverFuelPage = () => {
       setFuelings(
         (fuelingRes.data || []).filter((item) => item.vehicle_id === currentVehicle?.id)
       );
+
+      if (currentVehicle) {
+        setForm((current) => ({
+          ...current,
+          fuel_type: current.fuel_type || currentVehicle.fuel_type || "",
+          current_km:
+            current.current_km ||
+            (currentVehicle.current_km != null && currentVehicle.current_km !== ""
+              ? String(currentVehicle.current_km)
+              : ""),
+        }));
+      }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Erro ao carregar abastecimentos");
+      setError(formatFuelingError(err, "Erro ao carregar abastecimentos"));
     } finally {
       setBootLoading(false);
     }
@@ -76,6 +101,16 @@ const DriverFuelPage = () => {
       }, 0),
     [fuelings]
   );
+
+  const validateForm = () => {
+    if (!vehicle?.id) return "Nenhum veículo associado ao motorista.";
+    if (!form.fuel_type) return "Selecione o combustível.";
+    if (!isPositiveNumber(form.liters)) return "Informe a quantidade de litros.";
+    if (!isPositiveNumber(form.price_per_liter)) return "Informe o preço por litro.";
+    if (!isPositiveNumber(form.current_km)) return "Informe a quilometragem atual.";
+    if (!form.station.trim()) return "Informe o posto.";
+    return null;
+  };
 
   const uploadReceiptToBackend = async (fuelingId: string, file: File) => {
     const formData = new FormData();
@@ -108,8 +143,11 @@ const DriverFuelPage = () => {
   };
 
   const saveFueling = async () => {
-    if (!vehicle?.id) {
-      setError("Nenhum veículo associado ao motorista.");
+    const validationError = validateForm();
+
+    if (validationError) {
+      setError(validationError);
+      setMessage(null);
       return;
     }
 
@@ -124,7 +162,8 @@ const DriverFuelPage = () => {
         liters: Number(form.liters),
         price_per_liter: Number(form.price_per_liter),
         current_km: Number(form.current_km),
-        station: form.station,
+        station: form.station.trim(),
+        notes: form.notes.trim() || undefined,
       });
 
       const fuelingId =
@@ -133,7 +172,7 @@ const DriverFuelPage = () => {
         created?.data?.data?.id;
 
       if (!fuelingId) {
-        throw new Error("Abastecimento criado, mas o ID não retornou da API.");
+        throw new Error("Abastecimento criado, mas a API não retornou o ID.");
       }
 
       if (receiptFile) {
@@ -141,11 +180,18 @@ const DriverFuelPage = () => {
       }
 
       setMessage("Abastecimento registrado com sucesso");
-      setForm(initialForm);
+      setForm({
+        ...initialForm,
+        fuel_type: vehicle.fuel_type || "",
+        current_km:
+          vehicle.current_km != null && vehicle.current_km !== ""
+            ? String(vehicle.current_km)
+            : "",
+      });
       setReceiptFile(null);
       await loadContext();
-    } catch (err: any) {
-      setError(err instanceof ApiError ? err.message : err?.message || "Erro ao salvar abastecimento");
+    } catch (err) {
+      setError(formatFuelingError(err, "Erro ao salvar abastecimento"));
     } finally {
       setLoading(false);
     }
@@ -175,20 +221,20 @@ const DriverFuelPage = () => {
           <h2 className="text-lg font-semibold text-foreground">Novo abastecimento</h2>
 
           <div className="space-y-2">
-  <Label>Combustível</Label>
-  <select
-    value={form.fuel_type}
-    onChange={(e) => setForm((current) => ({ ...current, fuel_type: e.target.value }))}
-    className="h-12 w-full rounded-md bg-secondary border border-border px-3 text-sm text-foreground"
-  >
-    <option value="">Selecione o combustível</option>
-    {FUEL_TYPE_OPTIONS.map((fuelType) => (
-      <option key={fuelType} value={fuelType}>
-        {fuelType}
-      </option>
-    ))}
-  </select>
-</div>
+            <Label>Combustível</Label>
+            <select
+              value={form.fuel_type}
+              onChange={(e) => setForm((current) => ({ ...current, fuel_type: e.target.value }))}
+              className="h-12 w-full rounded-md bg-secondary border border-border px-3 text-sm text-foreground"
+            >
+              <option value="">Selecione o combustível</option>
+              {FUEL_TYPE_OPTIONS.map((fuelType) => (
+                <option key={fuelType} value={fuelType}>
+                  {fuelType}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div className="space-y-2">
             <Label>Litros</Label>
@@ -226,6 +272,16 @@ const DriverFuelPage = () => {
               value={form.station}
               onChange={(e) => setForm((current) => ({ ...current, station: e.target.value }))}
               className="h-12 bg-secondary border-border"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Observação</Label>
+            <Textarea
+              value={form.notes}
+              onChange={(e) => setForm((current) => ({ ...current, notes: e.target.value }))}
+              placeholder="Observação opcional"
+              className="min-h-24 bg-secondary border-border"
             />
           </div>
 
