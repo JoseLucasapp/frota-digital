@@ -51,7 +51,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
   const initials = ((user?.name || user?.institution || 'AD').trim().slice(0, 2)).toUpperCase();
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-background flex overflow-x-hidden">
       <aside className="hidden lg:flex flex-col w-64 bg-sidebar border-r border-sidebar-border fixed h-full z-30">
         <div className="p-3 border-b border-sidebar-border">
           <h1 className="text-lg font-bold text-sidebar-foreground">Frota Digital</h1>
@@ -115,7 +115,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
         </div>
       </aside>
 
-      <main className="flex-1 lg:ml-64">
+      <main className="min-w-0 flex-1 lg:ml-64">
         <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-xl border-b border-border px-4 lg:px-8 py-4 flex items-center justify-between">
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-foreground"><Menu className="w-6 h-6" /></button>
           <div className="hidden lg:block" />
@@ -148,7 +148,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
           </div>
         </header>
 
-        <div className="p-4 lg:p-8">{children}</div>
+        <div className="min-w-0 max-w-full overflow-x-hidden p-4 lg:p-8">{children}</div>
       </main>
 
       <NotificationModal open={notifOpen} onClose={() => setNotifOpen(false)} />

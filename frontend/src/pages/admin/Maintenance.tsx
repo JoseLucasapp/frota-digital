@@ -40,6 +40,26 @@ const AdminMaintenance = () => {
   const [form, setForm] = useState<any>(initialForm);
   const [saving, setSaving] = useState(false);
 
+  const translatePriority = (value: string) => {
+    const option = MAINTENANCE_PRIORITY_OPTIONS.find((opt) => opt.value === value);
+    return option ? option.label : value;
+  }
+
+  const translateStatus = (value: string) => {
+    switch (value) {
+      case "PENDING":
+        return "Pendente";
+      case "IN_PROGRESS":
+        return "Em andamento";
+      case "COMPLETED":
+        return "Concluída";
+      case "CANCELLED":
+        return "Cancelada";
+      default:
+        return value;
+    }
+  }
+
   const load = async () => {
     try {
       setLoading(true);
@@ -152,15 +172,15 @@ const AdminMaintenance = () => {
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="min-w-0 max-w-full space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Manutenções</h1>
           <p className="text-muted-foreground text-lg">{items.length} registros</p>
         </div>
 
-        <Button onClick={openCreate} className="gradient-primary text-primary-foreground h-12 px-6 text-base gap-2">
-          <Plus className="w-5 h-5" />
+        <Button onClick={openCreate} className="h-12 w-full justify-center gap-2 px-4 text-base sm:w-auto sm:px-6 gradient-primary text-primary-foreground">
+          <Plus className="h-5 w-5 shrink-0" />
           Nova manutenção
         </Button>
       </div>
@@ -179,14 +199,14 @@ const AdminMaintenance = () => {
       {loading ? <div className="glass-card p-4 text-sm text-muted-foreground">Carregando manutenções...</div> : null}
 
       {!loading && (
-        <div className="glass-card p-4 space-y-3">
+        <div className="glass-card max-w-full overflow-hidden p-4 space-y-3">
           {filtered.map((item) => {
             const vehicle = vehiclesMap[item.vehicle_id];
             const mechanic = mechanicsMap[item.mechanic_id];
 
             return (
-              <div key={item.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/40">
-                <div className="flex items-center gap-3">
+              <div key={item.id} className="flex flex-col gap-3 p-3 rounded-xl bg-secondary/40 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
                   <Wrench className="w-5 h-5 text-primary" />
                   <div>
                     <p className="font-medium text-foreground">
@@ -201,8 +221,12 @@ const AdminMaintenance = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <Badge>{item.status}</Badge>
+                <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+                  <Badge>{translateStatus(item.status)}</Badge>
+                  <Badge>{translatePriority(item.priority)}</Badge>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
                   <Button variant="outline" onClick={() => openEdit(item)}>
                     Editar
                   </Button>

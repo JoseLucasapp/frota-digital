@@ -155,15 +155,15 @@ const AdminFuel = () => {
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="min-w-0 max-w-full space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Abastecimentos</h1>
           <p className="text-muted-foreground text-lg">{fuelings.length} registros</p>
         </div>
 
-        <Button onClick={openCreate} className="gradient-primary text-primary-foreground h-12 px-6 text-base gap-2">
-          <Plus className="w-5 h-5" />
+        <Button onClick={openCreate} className="h-12 w-full justify-center gap-2 px-4 text-base sm:w-auto sm:px-6 gradient-primary text-primary-foreground">
+          <Plus className="h-5 w-5 shrink-0" />
           Novo abastecimento
         </Button>
       </div>
@@ -182,8 +182,9 @@ const AdminFuel = () => {
       {loading ? <div className="glass-card p-4 text-sm text-muted-foreground">Carregando abastecimentos...</div> : null}
 
       {!loading && (
-        <div className="glass-card overflow-hidden">
-          <table className="w-full">
+        <div className="glass-card max-w-full overflow-hidden">
+          <div className="w-full overflow-x-auto">
+            <table className="min-w-max w-full">
             <thead>
               <tr className="border-b border-border">
                 <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Veículo</th>
@@ -239,7 +240,8 @@ const AdminFuel = () => {
                 );
               })}
             </tbody>
-          </table>
+            </table>
+          </div>
 
           {!filtered.length ? <div className="p-4 text-sm text-muted-foreground">Nenhum abastecimento encontrado.</div> : null}
         </div>
