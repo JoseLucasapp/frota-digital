@@ -26,7 +26,16 @@ const initialForm = {
 
 const driverStatusOptions = [
   { value: "active", label: "Ativo" },
+  { value: "maintenance", label: "Em manutenção" },
   { value: "inactive", label: "Inativo" },
+];
+
+const driverDocumentLinks = [
+  { label: "CPF", field: "cpf_file_url" },
+  { label: "RG", field: "rg_file_url" },
+  { label: "CNH", field: "cnh_file_url" },
+  { label: "Residência", field: "home_doc_file_url" },
+  { label: "Complementar", field: "identifier_file_url" },
 ];
 
 const AdminDrivers = () => {
@@ -197,6 +206,7 @@ const AdminDrivers = () => {
                   <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Contato</th>
                   <th className="text-left p-4 text-sm font-semibold text-muted-foreground">CNH</th>
                   <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Status</th>
+                  <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Documentos</th>
                   <th className="text-right p-4 text-sm font-semibold text-muted-foreground">Ações</th>
                 </tr>
               </thead>
@@ -248,6 +258,27 @@ const AdminDrivers = () => {
                           ))}
                         </SelectContent>
                       </Select>
+                    </td>
+                    <td className="p-4 min-w-[220px]">
+                      <div className="flex flex-wrap gap-2">
+                        {driverDocumentLinks.some((doc) => driver[doc.field]) ? (
+                          driverDocumentLinks.map((doc) =>
+                            driver[doc.field] ? (
+                              <a
+                                key={doc.field}
+                                href={driver[doc.field]}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="rounded-lg border border-border px-2 py-1 text-xs text-primary hover:bg-secondary"
+                              >
+                                {doc.label}
+                              </a>
+                            ) : null
+                          )
+                        ) : (
+                          <span className="text-sm text-muted-foreground">Sem documentos</span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-4 text-right space-x-2">
                       <Button variant="outline" onClick={() => openEdit(driver)}>

@@ -34,6 +34,41 @@ function buildUrl(path: string, params?: ApiRequestOptions['params']) {
     return url.toString();
 }
 
+function translateApiErrorMessage(message: string, status: number) {
+    const normalized = message.trim().toLowerCase();
+
+    const translations: Record<string, string> = {
+        "vehicle_id, fuel_type, liters, price_per_liter, current_km and station are required":
+            "Veículo, combustível, litros, preço por litro, quilometragem atual e posto são obrigatórios.",
+        "vehicle_id, type, status and description are required":
+            "Veículo, tipo, status e descrição são obrigatórios.",
+        "vehicle not found": "Veículo não encontrado.",
+        "maintenance not found": "Manutenção não encontrada.",
+        "file is required": "Arquivo é obrigatório.",
+        "receipt uploaded successfully": "Comprovante enviado com sucesso.",
+        "receipt deleted successfully": "Comprovante removido com sucesso.",
+        "receipt not found": "Comprovante não encontrado.",
+        "id is required": "ID é obrigatório.",
+        "maintenanceid is required": "ID da manutenção é obrigatório.",
+        "request failed with status 400": "Não foi possível processar a solicitação.",
+        "request failed with status 401": "Sessão expirada. Faça login novamente.",
+        "request failed with status 403": "Você não tem permissão para executar esta ação.",
+        "request failed with status 404": "Registro não encontrado.",
+        "request failed with status 500": "Erro interno do servidor.",
+    };
+
+    if (translations[normalized]) {
+        return translations[normalized];
+    }
+
+    if (status === 401) return "Sessão expirada. Faça login novamente.";
+    if (status === 403) return "Você não tem permissão para executar esta ação.";
+    if (status === 404) return "Registro não encontrado.";
+    if (status >= 500) return "Erro interno do servidor.";
+
+    return message;
+}
+
 async function parseResponse(response: Response) {
     const text = await response.text();
     let payload: unknown = null;
@@ -47,13 +82,15 @@ async function parseResponse(response: Response) {
     }
 
     if (!response.ok) {
-        const message =
+        const rawMessage =
             typeof payload === 'object' &&
                 payload !== null &&
                 'message' in payload &&
                 typeof (payload as any).message === 'string'
                 ? (payload as any).message
                 : `Request failed with status ${response.status}`;
+
+        const message = translateApiErrorMessage(rawMessage, response.status);
 
         throw new ApiError(message, response.status, payload);
     }

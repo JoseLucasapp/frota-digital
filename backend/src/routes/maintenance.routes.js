@@ -59,7 +59,7 @@ module.exports = (router) => {
         "/maintenances",
         requireAuth,
         attachUser,
-        requireRole("ADMIN", "MECHANIC"),
+        requireRole("ADMIN", "MECHANIC", "DRIVER"),
         async (req, res) => await createMaintenancesController(req, res),
     );
 
