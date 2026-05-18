@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   MapPin,
   LocateFixed,
+  Info,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -93,12 +94,6 @@ const DriverDashboard = () => {
     if (!currentLoan) return null;
     return vehicles.find((vehicle) => vehicle.id === currentLoan.vehicle_id) || null;
   }, [currentLoan, vehicles]);
-
-  useEffect(() => {
-    if (currentVehicle?.last_address) {
-      setTrackingAddress(currentVehicle.last_address);
-    }
-  }, [currentVehicle?.id, currentVehicle?.last_address]);
 
   const myFuelings = useMemo(() => {
     if (!currentVehicle?.id) return [];
@@ -206,6 +201,7 @@ const DriverDashboard = () => {
       setSavingTracking(true);
       await api.post("/tracking/logs", payload);
       toast.success("Localização atualizada com sucesso.");
+      setTrackingAddress("");
       setTrackingNotes("");
       await refreshVehicles();
     } catch (err) {
@@ -260,6 +256,7 @@ const DriverDashboard = () => {
           });
 
           toast.success("Localização capturada pelo navegador.");
+          setTrackingAddress("");
           setTrackingNotes("");
           await refreshVehicles();
         } catch (err) {
@@ -372,6 +369,13 @@ const DriverDashboard = () => {
               {currentVehicle?.last_tracked_at
                 ? `Atualizado em ${new Date(currentVehicle.last_tracked_at).toLocaleString("pt-BR")}`
                 : "Nenhuma atualização enviada ainda"}
+            </p>
+          </div>
+
+          <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/10 p-3 text-sm text-muted-foreground">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <p>
+              Ao usar a localização do navegador, o sistema salva a latitude e a longitude do veículo junto com a atualização.
             </p>
           </div>
 

@@ -295,7 +295,7 @@ const AdminVehicles = () => {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
+      className="min-w-0 max-w-full space-y-6"
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -304,9 +304,9 @@ const AdminVehicles = () => {
         </div>
         <Button
           onClick={openCreate}
-          className="gradient-primary text-primary-foreground h-12 px-6 text-base gap-2"
+          className="h-12 w-full justify-center gap-2 px-4 text-base sm:w-auto sm:px-6 gradient-primary text-primary-foreground"
         >
-          <Plus className="w-5 h-5" />
+          <Plus className="h-5 w-5 shrink-0" />
           Novo veículo
         </Button>
       </div>
@@ -327,8 +327,9 @@ const AdminVehicles = () => {
       ) : null}
 
       {!loading && (
-        <div className="glass-card overflow-hidden">
-          <table className="w-full">
+        <div className="glass-card max-w-full overflow-hidden">
+          <div className="w-full overflow-x-auto">
+            <table className="min-w-max w-full">
             <thead>
               <tr className="border-b border-border">
                 <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Veículo</th>
@@ -410,7 +411,8 @@ const AdminVehicles = () => {
                 );
               })}
             </tbody>
-          </table>
+            </table>
+          </div>
 
           {!filtered.length ? (
             <div className="p-4 text-sm text-muted-foreground">Nenhum veículo encontrado.</div>
