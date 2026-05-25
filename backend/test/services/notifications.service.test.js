@@ -226,6 +226,37 @@ describe("notifications.service", () => {
         expect(result).toEqual(updated);
     });
 
+    test("updateNotificationService should retry read aliases when one column is missing", async () => {
+        const firstSingle = jest.fn().mockResolvedValue({
+            data: null,
+            error: {
+                code: "PGRST204",
+                message: "Could not find the 'read' column of 'notifications' in the schema cache",
+            },
+        });
+        const secondSingle = jest.fn().mockResolvedValue({
+            data: { id: "1", is_read: true },
+            error: null,
+        });
+
+        const firstSelect = jest.fn(() => ({ single: firstSingle }));
+        const secondSelect = jest.fn(() => ({ single: secondSingle }));
+        const firstEq = jest.fn(() => ({ select: firstSelect }));
+        const secondEq = jest.fn(() => ({ select: secondSelect }));
+        const firstUpdate = jest.fn(() => ({ eq: firstEq }));
+        const secondUpdate = jest.fn(() => ({ eq: secondEq }));
+
+        supabase.from
+            .mockReturnValueOnce({ update: firstUpdate })
+            .mockReturnValueOnce({ update: secondUpdate });
+
+        const result = await updateNotificationService("1", { is_read: true });
+
+        expect(firstUpdate).toHaveBeenCalledWith({ is_read: true, read: true });
+        expect(secondUpdate).toHaveBeenCalledWith({ is_read: true });
+        expect(result).toEqual({ id: "1", is_read: true, read: true });
+    });
+
     test("updateNotificationService should throw when id is missing", async () => {
         await expect(updateNotificationService()).rejects.toThrow("id is required");
     });

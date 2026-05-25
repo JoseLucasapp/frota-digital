@@ -5,6 +5,7 @@ const {
     deleteFileFromBucket,
 } = require("../utils/supabaseBucket");
 const { ensureAdminScope } = require("./scope.service");
+const { createNotificationsService } = require("./notifications.service");
 
 const resolveMaintenanceAdminId = async (data, user) => {
     if (user?.role === "ADMIN") return ensureAdminScope(user);
@@ -41,15 +42,21 @@ const createMaintenancesService = async (data, user) => {
     if (error) throw error;
 
     if (user?.role === "DRIVER" && result?.admin_id) {
-        await supabase.from("notifications").insert({
-            admin_id: result.admin_id,
-            driver_id: user.id,
-            type: "maintenance",
-            title: "Problema reportado pelo motorista",
-            message: `${result.type || "Manutenção"}: ${result.description || "Sem descrição"}`,
-            read: false,
-            is_read: false,
-        });
+        try {
+            await createNotificationsService(
+                {
+                    admin_id: result.admin_id,
+                    driver_id: user.id,
+                    type: "maintenance",
+                    title: "Problema reportado pelo motorista",
+                    message: `${result.type || "Manutenção"}: ${result.description || "Sem descrição"}`,
+                    is_read: false,
+                },
+                user
+            );
+        } catch (error) {
+            console.error("Falha ao criar notificação de manutenção:", error.message);
+        }
     }
 
     return result;

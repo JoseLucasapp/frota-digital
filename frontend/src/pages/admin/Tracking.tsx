@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Activity, Clock3, MapPin, Navigation, Search } from "lucide-react";
+import { Activity, Clock3, ExternalLink, MapPin, Navigation, Search, SquareParking } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { buildGoogleMapsEmbedUrl, buildGoogleMapsUrl } from "@/lib/maps";
+import { cleanTrackingNotes, isStopTrackingLog, trackingSourceLabel } from "@/lib/tracking";
 
 const OFFLINE_LIMIT_MS = 2 * 60 * 60 * 1000;
 
@@ -18,6 +20,7 @@ type TrackingOverviewItem = {
   last_address?: string | null;
   last_tracked_at?: string | null;
   last_tracking_source?: string | null;
+  google_maps_url?: string | null;
   tracking_status: "ok" | "offline";
   driver?: {
     id: string;
@@ -36,6 +39,8 @@ type TrackingLog = {
   source?: string | null;
   notes?: string | null;
   recorded_at?: string | null;
+  is_stop?: boolean | null;
+  google_maps_url?: string | null;
 };
 
 const formatDateTime = (value?: string | null) => {
@@ -54,36 +59,53 @@ const AdminTracking = () => {
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
+  const loadTracking = useCallback(async ({ showLoading = false } = {}) => {
+    try {
+      if (showLoading) {
         setLoading(true);
-        setError(null);
-
-        const [overviewRes, logsRes] = await Promise.all([
-          api.get<{ data: TrackingOverviewItem[] }>("/tracking/overview", { limit: 200 }),
-          api.get<{ data: TrackingLog[] }>("/tracking/logs", { limit: 200 }),
-        ]);
-
-        const overview = (overviewRes.data || []).map((item) => ({
-          ...item,
-          tracking_status: getTrackingStatus(item.last_tracked_at) as "ok" | "offline",
-        }));
-
-        setVehicles(overview);
-        setLogs(logsRes.data || []);
-        setSelectedVehicleId((current) => current || overview[0]?.id || null);
-      } catch (err) {
-        setError(err instanceof ApiError ? err.message : "Erro ao carregar rastreio");
-      } finally {
-        setLoading(false);
+      } else {
+        setRefreshing(true);
       }
-    };
+      setError(null);
 
-    load();
+      const [overviewRes, logsRes] = await Promise.all([
+        api.get<{ data: TrackingOverviewItem[] }>("/tracking/overview", { limit: 200 }),
+        api.get<{ data: TrackingLog[] }>("/tracking/logs", { limit: 200 }),
+      ]);
+
+      const overview = (overviewRes.data || []).map((item) => ({
+        ...item,
+        tracking_status: getTrackingStatus(item.last_tracked_at) as "ok" | "offline",
+      }));
+
+      setVehicles(overview);
+      setLogs(logsRes.data || []);
+      setSelectedVehicleId((current) => current || overview[0]?.id || null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erro ao carregar rastreio");
+    } finally {
+      if (showLoading) {
+        setLoading(false);
+      } else {
+        setRefreshing(false);
+      }
+    }
   }, []);
+
+  useEffect(() => {
+    loadTracking({ showLoading: true });
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadTracking();
+      }
+    }, 5000);
+
+    return () => window.clearInterval(intervalId);
+  }, [loadTracking]);
 
   const filteredVehicles = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -129,9 +151,13 @@ const AdminTracking = () => {
     const online = vehicles.filter((item) => item.tracking_status === "ok").length;
     const offline = Math.max(total - online, 0);
     const withAddress = vehicles.filter((item) => item.last_address).length;
+    const stops = logs.filter(isStopTrackingLog).length;
 
-    return { total, online, offline, withAddress };
-  }, [vehicles]);
+    return { total, online, offline, withAddress, stops };
+  }, [vehicles, logs]);
+
+  const selectedMapEmbedUrl = selectedVehicle ? buildGoogleMapsEmbedUrl(selectedVehicle) : null;
+  const selectedMapUrl = selectedVehicle?.google_maps_url || (selectedVehicle ? buildGoogleMapsUrl(selectedVehicle) : null);
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
@@ -139,6 +165,7 @@ const AdminTracking = () => {
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Rastreamento</h1>
           <p className="text-muted-foreground text-lg">Histórico e última posição dos veículos</p>
+          {refreshing ? <p className="text-sm text-muted-foreground mt-1">Atualizando...</p> : null}
         </div>
 
         <div className="relative w-full lg:max-w-sm">
@@ -152,7 +179,7 @@ const AdminTracking = () => {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <div className="glass-card p-5">
           <p className="text-sm text-muted-foreground">Veículos</p>
           <p className="text-3xl font-bold text-foreground mt-2">{summary.total}</p>
@@ -168,6 +195,10 @@ const AdminTracking = () => {
         <div className="glass-card p-5">
           <p className="text-sm text-muted-foreground">Com endereço salvo</p>
           <p className="text-3xl font-bold text-foreground mt-2">{summary.withAddress}</p>
+        </div>
+        <div className="glass-card p-5">
+          <p className="text-sm text-muted-foreground">Paradas registradas</p>
+          <p className="text-3xl font-bold text-foreground mt-2">{summary.stops}</p>
         </div>
       </div>
 
@@ -247,7 +278,7 @@ const AdminTracking = () => {
                     <p className="text-sm text-muted-foreground">Última atualização</p>
                     <p className="font-medium text-foreground mt-1">{formatDateTime(selectedVehicle.last_tracked_at)}</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Origem: {selectedVehicle.last_tracking_source || "Não informada"}
+                      Origem: {trackingSourceLabel(selectedVehicle.last_tracking_source)}
                     </p>
                   </div>
                   <div className="rounded-xl bg-secondary/50 p-4 md:col-span-2">
@@ -258,8 +289,29 @@ const AdminTracking = () => {
                         ? `${selectedVehicle.last_latitude}, ${selectedVehicle.last_longitude}`
                         : "Sem latitude/longitude"}
                     </p>
+                    {selectedMapUrl ? (
+                      <a
+                        href={selectedMapUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        Abrir no Google Maps
+                      </a>
+                    ) : null}
                   </div>
                 </div>
+
+                {selectedMapEmbedUrl ? (
+                  <iframe
+                    title={`Mapa ${selectedVehicle.plate}`}
+                    src={selectedMapEmbedUrl}
+                    className="h-72 w-full rounded-md border border-border"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
+                ) : null}
               </div>
 
               <div className="glass-card p-6">
@@ -269,25 +321,50 @@ const AdminTracking = () => {
                 </div>
 
                 <div className="space-y-3">
-                  {selectedLogs.map((log) => (
-                    <div key={log.id} className="rounded-xl border border-border bg-secondary/30 p-4">
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                        <div>
-                          <p className="font-medium text-foreground">{log.address || "Sem endereço informado"}</p>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {log.latitude != null && log.longitude != null
-                              ? `${log.latitude}, ${log.longitude}`
-                              : "Sem latitude/longitude"}
-                          </p>
+                  {selectedLogs.map((log) => {
+                    const isStop = isStopTrackingLog(log);
+                    const logMapUrl = log.google_maps_url || buildGoogleMapsUrl(log);
+                    const cleanedNotes = cleanTrackingNotes(log.notes);
+
+                    return (
+                      <div key={log.id} className="rounded-xl border border-border bg-secondary/30 p-4">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-medium text-foreground">{log.address || "Sem endereço informado"}</p>
+                              {isStop ? (
+                                <Badge className="bg-primary/15 text-primary border-0">
+                                  <SquareParking className="mr-1 h-3 w-3" />
+                                  Parada
+                                </Badge>
+                              ) : null}
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {log.latitude != null && log.longitude != null
+                                ? `${log.latitude}, ${log.longitude}`
+                                : "Sem latitude/longitude"}
+                            </p>
+                            {logMapUrl ? (
+                              <a
+                                href={logMapUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                                Google Maps
+                              </a>
+                            ) : null}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            <p>{formatDateTime(log.recorded_at)}</p>
+                            <p className="mt-1">Origem: {trackingSourceLabel(log.source)}</p>
+                          </div>
                         </div>
-                        <div className="text-sm text-muted-foreground">
-                          <p>{formatDateTime(log.recorded_at)}</p>
-                          <p className="mt-1">Origem: {log.source || "manual"}</p>
-                        </div>
+                        {cleanedNotes ? <p className="text-sm text-muted-foreground mt-3">Obs.: {cleanedNotes}</p> : null}
                       </div>
-                      {log.notes ? <p className="text-sm text-muted-foreground mt-3">Obs.: {log.notes}</p> : null}
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {!selectedLogs.length ? (
                     <p className="text-sm text-muted-foreground">Nenhuma atualização de rastreio para este veículo.</p>

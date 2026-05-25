@@ -1,4 +1,4 @@
-import { ReactNode, useMemo, useState, useRef, useEffect } from "react";
+import { ReactNode, useCallback, useMemo, useState, useRef, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Car, Users, MapPin, Fuel, Wrench, Bell, LogOut, Menu, X,
@@ -7,6 +7,8 @@ import {
 import { cn } from "@/lib/utils";
 import NotificationModal from "@/components/NotificationModal";
 import { clearAuthSession, getAuthUser } from "@/lib/auth";
+import { api } from "@/lib/api";
+import { isNotificationRead } from "@/lib/notifications";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -30,6 +32,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const profileRef = useRef<HTMLDivElement>(null);
   const user = useMemo(() => getAuthUser(), []);
 
@@ -42,6 +45,27 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  const loadUnreadNotifications = useCallback(async () => {
+    try {
+      const response = await api.get<{ data: any[] }>("/notifications", { limit: 50 });
+      setUnreadNotifications((response.data || []).filter((item) => !isNotificationRead(item)).length);
+    } catch {
+      setUnreadNotifications(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadUnreadNotifications();
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadUnreadNotifications();
+      }
+    }, 10000);
+
+    return () => window.clearInterval(intervalId);
+  }, [loadUnreadNotifications]);
 
   const handleLogout = () => {
     clearAuthSession();
@@ -122,6 +146,11 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
           <div className="flex items-center gap-4">
             <button onClick={() => setNotifOpen(true)} className="relative text-muted-foreground hover:text-foreground transition-colors">
               <Bell className="w-6 h-6" />
+              {unreadNotifications > 0 ? (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold leading-none text-primary-foreground">
+                  {unreadNotifications > 9 ? "9+" : unreadNotifications}
+                </span>
+              ) : null}
             </button>
             <div className="relative" ref={profileRef}>
               <button onClick={() => setProfileOpen(!profileOpen)} className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center text-sm font-bold text-primary-foreground hover:opacity-90 transition-opacity">
@@ -151,7 +180,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
         <div className="min-w-0 max-w-full overflow-x-hidden p-4 lg:p-8">{children}</div>
       </main>
 
-      <NotificationModal open={notifOpen} onClose={() => setNotifOpen(false)} />
+      <NotificationModal open={notifOpen} onClose={() => { setNotifOpen(false); loadUnreadNotifications(); }} />
     </div>
   );
 };

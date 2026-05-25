@@ -4,6 +4,7 @@ import { Car, Users, Fuel, Wrench, AlertTriangle } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { api, ApiError } from "@/lib/api";
+import { isNotificationRead } from "@/lib/notifications";
 
 const AdminDashboard = () => {
   const [vehicles, setVehicles] = useState<any[]>([]);
@@ -107,7 +108,7 @@ const AdminDashboard = () => {
               <div className="space-y-3">
                 {notifications.slice(0, 6).map((item) => (
                   <div key={item.id} className="flex items-start gap-3 p-3 rounded-xl bg-secondary/50">
-                    <div className={`w-2 h-2 rounded-full mt-2 ${item.read ? 'bg-muted' : 'bg-primary'}`} />
+                    <div className={`w-2 h-2 rounded-full mt-2 ${isNotificationRead(item) ? 'bg-muted' : 'bg-primary'}`} />
                     <div>
                       <p className="font-medium text-foreground text-sm">{item.title}</p>
                       <p className="text-muted-foreground text-sm">{item.message}</p>

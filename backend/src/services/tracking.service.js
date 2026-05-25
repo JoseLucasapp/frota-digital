@@ -1,8 +1,102 @@
 const supabase = require("../config/supabase");
 const { ensureAdminScope } = require("./scope.service");
+const { createNotificationsService } = require("./notifications.service");
 
 const MAX_LIMIT = 500;
 const OFFLINE_WINDOW_HOURS = 2;
+const STOP_NOTE_MARKER = "[parada]";
+
+const normalizeOptionalText = (value) => String(value || "").trim();
+
+const isStopPayload = (payload = {}) =>
+  payload.is_stop === true ||
+  payload.stop === true ||
+  String(payload.event_type || "").toLowerCase() === "stop" ||
+  String(payload.event_type || "").toLowerCase() === "parada";
+
+const isStopNotes = (notes) => String(notes || "").toLowerCase().includes(STOP_NOTE_MARKER);
+
+const isStopLog = (log = {}) => {
+  const source = String(log.source || "").toLowerCase();
+  return isStopNotes(log.notes) || source.includes("stop") || source.includes("parada");
+};
+
+const buildStopNotes = ({ notes, stopReason, isStop }) => {
+  if (!isStop) return notes || null;
+
+  const parts = [STOP_NOTE_MARKER, "Parada registrada via Google Maps."];
+  if (stopReason) parts.push(`Motivo: ${stopReason}.`);
+  if (notes) parts.push(notes);
+
+  return parts.join(" ");
+};
+
+const buildGoogleMapsUrl = ({ latitude, longitude, address, last_latitude, last_longitude, last_address }) => {
+  const mapLatitude = latitude ?? last_latitude;
+  const mapLongitude = longitude ?? last_longitude;
+  const mapAddress = address ?? last_address;
+  const hasCoordinates = mapLatitude != null && mapLongitude != null;
+  const query = hasCoordinates ? `${mapLatitude},${mapLongitude}` : normalizeOptionalText(mapAddress);
+
+  if (!query) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+};
+
+const enrichTrackingLog = (log) => {
+  if (!log) return log;
+
+  const googleMapsUrl = buildGoogleMapsUrl(log);
+  const isStop = isStopLog(log);
+
+  if (!googleMapsUrl && !isStop) return log;
+
+  return {
+    ...log,
+    ...(isStop ? { is_stop: true } : {}),
+    ...(googleMapsUrl ? { google_maps_url: googleMapsUrl } : {}),
+  };
+};
+
+const formatVehicleLabel = (vehicle) => {
+  const model = [vehicle.make, vehicle.model].filter(Boolean).join(" ");
+  return [vehicle.plate, model].filter(Boolean).join(" - ") || "Veículo";
+};
+
+const createDriverTrackingNotification = async ({ adminId, driverId, user, vehicle, trackingLog, isStop }) => {
+  if (!adminId || !driverId || user?.role !== "DRIVER") return;
+
+  const driverName = user?.profile?.name || user?.name || "Motorista";
+  const vehicleLabel = formatVehicleLabel(vehicle);
+  const location =
+    trackingLog.address ||
+    (trackingLog.latitude != null && trackingLog.longitude != null
+      ? `${trackingLog.latitude}, ${trackingLog.longitude}`
+      : "Localização sem endereço");
+  const googleMapsUrl = buildGoogleMapsUrl(trackingLog);
+
+  const messageParts = [
+    `${driverName} atualizou o rastreamento de ${vehicleLabel}.`,
+    `Local: ${location}.`,
+  ];
+
+  if (googleMapsUrl) messageParts.push(`Google Maps: ${googleMapsUrl}`);
+
+  try {
+    await createNotificationsService(
+      {
+        admin_id: adminId,
+        driver_id: driverId,
+        type: "alert",
+        title: isStop ? "Parada registrada pelo motorista" : "Rastreamento atualizado pelo motorista",
+        message: messageParts.join("\n"),
+        is_read: false,
+      },
+      user
+    );
+  } catch (error) {
+    console.error("Falha ao criar notificação de rastreamento:", error.message);
+  }
+};
 
 const normalizeOptionalNumber = (value) => {
   if (value == null || value === "") return null;
@@ -62,8 +156,10 @@ const createTrackingLogService = async (payload, user) => {
     throw error;
   }
 
-  const address = String(payload.address || "").trim();
-  const notes = String(payload.notes || "").trim();
+  const address = normalizeOptionalText(payload.address);
+  const notes = normalizeOptionalText(payload.notes);
+  const stopReason = normalizeOptionalText(payload.stop_reason);
+  const isStop = isStopPayload(payload);
   const latitude = normalizeOptionalNumber(payload.latitude);
   const longitude = normalizeOptionalNumber(payload.longitude);
 
@@ -104,7 +200,7 @@ const createTrackingLogService = async (payload, user) => {
     longitude,
     address: address || null,
     source: payload.source || (latitude != null ? "browser_geolocation" : "manual"),
-    notes: notes || null,
+    notes: buildStopNotes({ notes, stopReason, isStop }),
     recorded_at: recordedAt,
   };
 
@@ -132,7 +228,17 @@ const createTrackingLogService = async (payload, user) => {
 
   if (updateError) throw updateError;
 
-  return created;
+  const enrichedLog = enrichTrackingLog(created);
+  await createDriverTrackingNotification({
+    adminId,
+    driverId,
+    user,
+    vehicle,
+    trackingLog: enrichedLog,
+    isStop,
+  });
+
+  return enrichedLog;
 };
 
 const getTrackingLogsService = async (query = {}, user) => {
@@ -163,7 +269,7 @@ const getTrackingLogsService = async (query = {}, user) => {
   if (error) throw error;
 
   return {
-    data: data || [],
+    data: (data || []).map(enrichTrackingLog),
     pagination: {
       page,
       limit,
@@ -253,6 +359,7 @@ const getTrackingOverviewService = async (query = {}, user) => {
 
     return {
       ...vehicle,
+      google_maps_url: buildGoogleMapsUrl(vehicle),
       tracking_status: vehicle.last_tracked_at ? trackingStatus : "offline",
       driver,
       loan,

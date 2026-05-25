@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Bell, X, FileText, Wrench, Fuel, AlertTriangle } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
+import { isNotificationRead } from "@/lib/notifications";
 
 const typeIcons = {
   document: FileText,
@@ -21,8 +22,6 @@ interface Props {
   open: boolean;
   onClose: () => void;
 }
-
-const isNotificationRead = (notification: any) => Boolean(notification.read || notification.is_read);
 
 const NotificationModal = ({ open, onClose }: Props) => {
   const [selected, setSelected] = useState<string | null>(null);
@@ -66,7 +65,7 @@ const NotificationModal = ({ open, onClose }: Props) => {
     );
 
     try {
-      await api.put(`/notifications/${notification.id}`, { read: true, is_read: true });
+      await api.put(`/notifications/${notification.id}`, { is_read: true });
     } catch {
       setNotifications((current) =>
         current.map((item) =>

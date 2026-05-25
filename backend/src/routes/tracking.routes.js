@@ -145,6 +145,14 @@ module.exports = (router) => {
    *                 type: string
    *                 enum: [manual, browser_geolocation]
    *                 example: manual
+   *               is_stop:
+   *                 type: boolean
+   *                 example: true
+   *                 description: Mark this log as a stopped vehicle event registered with Google Maps.
+   *               stop_reason:
+   *                 type: string
+   *                 example: Entrega concluída
+   *                 description: Optional reason when is_stop is true.
    *               notes:
    *                 type: string
    *                 example: Atualização feita pelo motorista

@@ -6,8 +6,13 @@ jest.mock("../../src/services/scope.service", () => ({
   ensureAdminScope: jest.fn(),
 }));
 
+jest.mock("../../src/services/notifications.service", () => ({
+  createNotificationsService: jest.fn(),
+}));
+
 const supabase = require("../../src/config/supabase");
 const { ensureAdminScope } = require("../../src/services/scope.service");
+const { createNotificationsService } = require("../../src/services/notifications.service");
 
 const {
   createTrackingLogService,
@@ -175,6 +180,7 @@ describe("tracking.service", () => {
       );
 
       expect(updateBuilder.eq).toHaveBeenCalledWith("id", "vehicle-1");
+      expect(createNotificationsService).not.toHaveBeenCalled();
       expect(result).toEqual({
         id: "tracking-1",
         vehicle_id: "vehicle-1",
@@ -210,6 +216,7 @@ describe("tracking.service", () => {
           vehicle_id: "vehicle-1",
           admin_id: "admin-1",
           driver_id: "driver-1",
+          address: "Rua Manual",
         },
         error: null,
       });
@@ -248,12 +255,92 @@ describe("tracking.service", () => {
         })
       );
 
+      expect(createNotificationsService).toHaveBeenCalledWith(
+        expect.objectContaining({
+          admin_id: "admin-1",
+          driver_id: "driver-1",
+          type: "alert",
+          title: "Rastreamento atualizado pelo motorista",
+          message: expect.stringContaining("Rua Manual"),
+          is_read: false,
+        }),
+        {
+          id: "driver-1",
+          role: "DRIVER",
+        }
+      );
+
       expect(result).toEqual({
         id: "tracking-1",
         vehicle_id: "vehicle-1",
         admin_id: "admin-1",
         driver_id: "driver-1",
       });
+    });
+
+    it("should mark stop logs and expose Google Maps URL", async () => {
+      ensureAdminScope.mockReturnValue("admin-1");
+
+      const vehicleBuilder = makeQueryBuilder({
+        data: {
+          id: "vehicle-1",
+          admin_id: "admin-1",
+          plate: "ABC-1234",
+          make: "Fiat",
+          model: "Uno",
+        },
+        error: null,
+      });
+
+      const insertBuilder = makeQueryBuilder({
+        data: {
+          id: "tracking-1",
+          vehicle_id: "vehicle-1",
+          admin_id: "admin-1",
+          latitude: -6.88,
+          longitude: -38.56,
+          notes: "[parada] Parada registrada via Google Maps. Motivo: Entrega.",
+        },
+        error: null,
+      });
+
+      const updateBuilder = makeQueryBuilder({
+        error: null,
+      });
+
+      supabase.from
+        .mockReturnValueOnce(vehicleBuilder)
+        .mockReturnValueOnce(insertBuilder)
+        .mockReturnValueOnce(updateBuilder);
+
+      const result = await createTrackingLogService(
+        {
+          vehicle_id: "vehicle-1",
+          latitude: -6.88,
+          longitude: -38.56,
+          is_stop: true,
+          stop_reason: "Entrega",
+        },
+        {
+          id: "admin-1",
+          role: "ADMIN",
+        }
+      );
+
+      expect(insertBuilder.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          vehicle_id: "vehicle-1",
+          notes: "[parada] Parada registrada via Google Maps. Motivo: Entrega.",
+        })
+      );
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          id: "tracking-1",
+          is_stop: true,
+          google_maps_url: expect.stringContaining("google.com/maps"),
+        })
+      );
     });
 
     it("should throw 403 when driver is not linked to vehicle", async () => {

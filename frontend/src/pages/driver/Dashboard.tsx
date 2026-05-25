@@ -12,6 +12,7 @@ import {
   MapPin,
   LocateFixed,
   Info,
+  ExternalLink,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { clearAuthSession, getAuthUser } from "@/lib/auth";
 import { toast } from "sonner";
+import { buildGoogleMapsUrl } from "@/lib/maps";
 
 const quickActions = [
   { icon: Fuel, label: "Registrar Abastecimento", path: "/driver/fuel", color: "text-warning" },
@@ -38,6 +40,42 @@ type TrackingPayload = {
   source?: string;
 };
 
+type TrackingAddressForm = {
+  city: string;
+  state: string;
+  street: string;
+  neighborhood: string;
+  number: string;
+};
+
+const emptyTrackingAddress: TrackingAddressForm = {
+  city: "",
+  state: "",
+  street: "",
+  neighborhood: "",
+  number: "",
+};
+
+const trackingAddressLabels: Record<keyof TrackingAddressForm, string> = {
+  city: "cidade",
+  state: "estado",
+  street: "rua",
+  neighborhood: "bairro",
+  number: "número",
+};
+
+const formatTrackingAddress = (address: TrackingAddressForm) => {
+  const streetLine = [address.street.trim(), address.number.trim()].filter(Boolean).join(", ");
+  const cityLine = [address.city.trim(), address.state.trim()].filter(Boolean).join(" - ");
+
+  return [streetLine, address.neighborhood.trim(), cityLine].filter(Boolean).join(" - ");
+};
+
+const getMissingTrackingAddressFields = (address: TrackingAddressForm) =>
+  (Object.entries(address) as Array<[keyof TrackingAddressForm, string]>)
+    .filter(([, value]) => !value.trim())
+    .map(([field]) => trackingAddressLabels[field]);
+
 const DriverDashboard = () => {
   const navigate = useNavigate();
   const user = getAuthUser();
@@ -48,7 +86,7 @@ const DriverDashboard = () => {
   const [maintenances, setMaintenances] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [trackingAddress, setTrackingAddress] = useState("");
+  const [trackingAddress, setTrackingAddress] = useState<TrackingAddressForm>(emptyTrackingAddress);
   const [trackingNotes, setTrackingNotes] = useState("");
   const [savingTracking, setSavingTracking] = useState(false);
 
@@ -191,7 +229,11 @@ const DriverDashboard = () => {
     setVehicles(vehicleRes.data || []);
   };
 
-  const saveTracking = async (payload: TrackingPayload) => {
+  const updateTrackingAddress = (field: keyof TrackingAddressForm, value: string) => {
+    setTrackingAddress((current) => ({ ...current, [field]: value }));
+  };
+
+  const saveTracking = async (payload: TrackingPayload, successMessage = "Localização atualizada com sucesso.") => {
     if (!currentVehicle?.id) {
       toast.error("Nenhum veículo vinculado ao motorista.");
       return;
@@ -200,8 +242,8 @@ const DriverDashboard = () => {
     try {
       setSavingTracking(true);
       await api.post("/tracking/logs", payload);
-      toast.success("Localização atualizada com sucesso.");
-      setTrackingAddress("");
+      toast.success(successMessage);
+      setTrackingAddress({ ...emptyTrackingAddress });
       setTrackingNotes("");
       await refreshVehicles();
     } catch (err) {
@@ -217,14 +259,15 @@ const DriverDashboard = () => {
       return;
     }
 
-    if (!trackingAddress.trim()) {
-      toast.error("Informe um endereço ou use a localização do navegador.");
+    const missingFields = getMissingTrackingAddressFields(trackingAddress);
+    if (missingFields.length) {
+      toast.error(`Preencha ${missingFields.join(", ")}.`);
       return;
     }
 
     await saveTracking({
       vehicle_id: currentVehicle.id,
-      address: trackingAddress.trim(),
+      address: formatTrackingAddress(trackingAddress),
       notes: trackingNotes.trim() || undefined,
       source: "manual",
     });
@@ -250,13 +293,13 @@ const DriverDashboard = () => {
             vehicle_id: currentVehicle.id,
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
-            address: trackingAddress.trim() || undefined,
+            address: formatTrackingAddress(trackingAddress) || undefined,
             notes: trackingNotes.trim() || undefined,
             source: "browser_geolocation",
           });
 
           toast.success("Localização capturada pelo navegador.");
-          setTrackingAddress("");
+          setTrackingAddress({ ...emptyTrackingAddress });
           setTrackingNotes("");
           await refreshVehicles();
         } catch (err) {
@@ -276,6 +319,8 @@ const DriverDashboard = () => {
       },
     );
   };
+
+  const currentVehicleMapUrl = currentVehicle ? buildGoogleMapsUrl(currentVehicle) : null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -370,6 +415,17 @@ const DriverDashboard = () => {
                 ? `Atualizado em ${new Date(currentVehicle.last_tracked_at).toLocaleString("pt-BR")}`
                 : "Nenhuma atualização enviada ainda"}
             </p>
+            {currentVehicleMapUrl ? (
+              <a
+                href={currentVehicleMapUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Abrir no Google Maps
+              </a>
+            ) : null}
           </div>
 
           <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/10 p-3 text-sm text-muted-foreground">
@@ -380,12 +436,39 @@ const DriverDashboard = () => {
           </div>
 
           <div className="space-y-3">
-            <Input
-              value={trackingAddress}
-              onChange={(event) => setTrackingAddress(event.target.value)}
-              placeholder="Endereço atual do veículo"
-              disabled={!currentVehicle || savingTracking}
-            />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Input
+                value={trackingAddress.city}
+                onChange={(event) => updateTrackingAddress("city", event.target.value)}
+                placeholder="Cidade"
+                disabled={!currentVehicle || savingTracking}
+              />
+              <Input
+                value={trackingAddress.state}
+                onChange={(event) => updateTrackingAddress("state", event.target.value)}
+                placeholder="Estado"
+                disabled={!currentVehicle || savingTracking}
+              />
+              <Input
+                value={trackingAddress.street}
+                onChange={(event) => updateTrackingAddress("street", event.target.value)}
+                placeholder="Rua"
+                disabled={!currentVehicle || savingTracking}
+                className="sm:col-span-2"
+              />
+              <Input
+                value={trackingAddress.neighborhood}
+                onChange={(event) => updateTrackingAddress("neighborhood", event.target.value)}
+                placeholder="Bairro"
+                disabled={!currentVehicle || savingTracking}
+              />
+              <Input
+                value={trackingAddress.number}
+                onChange={(event) => updateTrackingAddress("number", event.target.value)}
+                placeholder="Número"
+                disabled={!currentVehicle || savingTracking}
+              />
+            </div>
             <Textarea
               value={trackingNotes}
               onChange={(event) => setTrackingNotes(event.target.value)}
