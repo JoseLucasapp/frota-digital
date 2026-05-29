@@ -1,6 +1,9 @@
 const supabase = require("../config/supabase");
+const crypto = require("crypto");
 const { verifyPassword, hashPassword } = require("../utils/hash");
+const { sendEmail } = require("../utils/sentEmail");
 const { createToken } = require("../utils/jwt");
+const { onlyDigits } = require("../utils/document");
 
 const TABLES = [
   { table: "admins", role: "ADMIN" },
@@ -98,7 +101,7 @@ const validateDriverFirstAccessService = async ({ email, cpf }) => {
     .from("drivers")
     .select("*")
     .eq("email", String(email).trim())
-    .eq("cpf", String(cpf).trim())
+    .eq("cpf", onlyDigits(cpf))
     .eq("is_first_acc", true)
     .maybeSingle();
 
@@ -133,7 +136,7 @@ const validateMechanicFirstAccessService = async ({ email, cnpj }) => {
     .from("mechanics")
     .select("*")
     .eq("email", String(email).trim())
-    .eq("cnpj", String(cnpj).trim())
+    .eq("cnpj", onlyDigits(cnpj))
     .eq("is_first_acc", true)
     .maybeSingle();
 
@@ -241,6 +244,104 @@ const completeMechanicFirstAccessService = async ({ userId, password }) => {
   };
 };
 
+const requestAdminPasswordCodeService = async (adminId) => {
+  if (!adminId) {
+    const err = new Error("Administrador não informado.");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const { data: admin, error: findError } = await supabase
+    .from("admins")
+    .select("id, email, name")
+    .eq("id", adminId)
+    .maybeSingle();
+
+  if (findError) throw findError;
+  if (!admin) {
+    const err = new Error("Administrador não encontrado.");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const code = String(crypto.randomInt(100000, 999999));
+  const code_hash = await hashPassword(code);
+  const expires_at = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+  await supabase
+    .from("admin_password_codes")
+    .update({ used_at: new Date().toISOString() })
+    .eq("admin_id", admin.id)
+    .is("used_at", null);
+
+  const { error } = await supabase
+    .from("admin_password_codes")
+    .insert({ admin_id: admin.id, code_hash, expires_at });
+
+  if (error) throw error;
+
+  await sendEmail(
+    admin.email,
+    "Código para alterar sua senha",
+    `Seu código para alterar a senha é: ${code}. Ele expira em 15 minutos.`
+  );
+
+  return { success: true, message: "Código enviado para o email cadastrado." };
+};
+
+const verifyAdminPasswordCodeService = async (adminId, code) => {
+  if (!adminId || !code) {
+    const err = new Error("Administrador e código são obrigatórios.");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const { data: rows, error } = await supabase
+    .from("admin_password_codes")
+    .select("*")
+    .eq("admin_id", adminId)
+    .is("used_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+  const row = rows?.[0];
+  if (!row || !(await verifyPassword(String(code).trim(), row.code_hash))) {
+    const err = new Error("Código inválido ou expirado.");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  return { success: true, message: "Código confirmado." };
+};
+
+const confirmAdminPasswordChangeService = async (adminId, code, password) => {
+  if (!password || String(password).length < 6) {
+    const err = new Error("A nova senha deve ter pelo menos 6 caracteres.");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  await verifyAdminPasswordCodeService(adminId, code);
+
+  const password_hash = await hashPassword(password);
+  const { error: updateError } = await supabase
+    .from("admins")
+    .update({ password_hash })
+    .eq("id", adminId);
+
+  if (updateError) throw updateError;
+
+  await supabase
+    .from("admin_password_codes")
+    .update({ used_at: new Date().toISOString() })
+    .eq("admin_id", adminId)
+    .is("used_at", null);
+
+  return { success: true, message: "Senha alterada com sucesso." };
+};
+
 module.exports = {
   getProfileByUserId,
   loginService,
@@ -248,4 +349,7 @@ module.exports = {
   validateMechanicFirstAccessService,
   completeDriverFirstAccessService,
   completeMechanicFirstAccessService,
+  requestAdminPasswordCodeService,
+  verifyAdminPasswordCodeService,
+  confirmAdminPasswordChangeService,
 };

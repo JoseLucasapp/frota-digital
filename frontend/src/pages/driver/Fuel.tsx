@@ -43,6 +43,7 @@ const DriverFuelPage = () => {
   const [bootLoading, setBootLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [kmEdited, setKmEdited] = useState(false);
 
   const loadContext = async () => {
     try {
@@ -68,6 +69,7 @@ const DriverFuelPage = () => {
       setFuelings(
         (fuelingRes.data || []).filter((item) => item.vehicle_id === currentVehicle?.id)
       );
+      setKmEdited(false);
 
       if (currentVehicle) {
         setForm((current) => ({
@@ -108,6 +110,11 @@ const DriverFuelPage = () => {
     if (!isPositiveNumber(form.liters)) return "Informe a quantidade de litros.";
     if (!isPositiveNumber(form.price_per_liter)) return "Informe o preço por litro.";
     if (!isPositiveNumber(form.current_km)) return "Informe a quilometragem atual.";
+    if (!kmEdited) return "Confirme ou altere a quilometragem atual antes de registrar.";
+
+    const previousKm = Number(vehicle.current_km || 0);
+    const nextKm = Number(form.current_km);
+    if (nextKm <= previousKm) return `A quilometragem atual deve ser maior que ${previousKm}.`;
     if (!form.station.trim()) return "Informe o posto.";
     return null;
   };
@@ -189,6 +196,7 @@ const DriverFuelPage = () => {
             : "",
       });
       setReceiptFile(null);
+      setKmEdited(false);
       await loadContext();
     } catch (err) {
       setError(formatFuelingError(err, "Erro ao salvar abastecimento"));
@@ -207,9 +215,6 @@ const DriverFuelPage = () => {
           </button>
           <h1 className="text-2xl font-bold text-foreground">Abastecimentos</h1>
         </div>
-        <p className="text-muted-foreground">
-          {vehicle ? `Veículo atual: ${vehicle.plate}` : "Nenhum veículo ativo"}
-        </p>
       </div>
 
       {bootLoading ? <div className="glass-card p-4 text-sm text-muted-foreground">Carregando...</div> : null}
@@ -225,6 +230,7 @@ const DriverFuelPage = () => {
             <select
               value={form.fuel_type}
               onChange={(e) => setForm((current) => ({ ...current, fuel_type: e.target.value }))}
+              disabled
               className="h-12 w-full rounded-md bg-secondary border border-border px-3 text-sm text-foreground"
             >
               <option value="">Selecione o combustível</option>
@@ -242,6 +248,7 @@ const DriverFuelPage = () => {
               type="number"
               value={form.liters}
               onChange={(e) => setForm((current) => ({ ...current, liters: e.target.value }))}
+              placeholder="Ex.: 40"
               className="h-12 bg-secondary border-border"
             />
           </div>
@@ -252,16 +259,21 @@ const DriverFuelPage = () => {
               type="number"
               value={form.price_per_liter}
               onChange={(e) => setForm((current) => ({ ...current, price_per_liter: e.target.value }))}
+              placeholder="Ex.: 5,89"
               className="h-12 bg-secondary border-border"
             />
           </div>
 
           <div className="space-y-2">
-            <Label>KM atual</Label>
+            <Label>KM atual <span className="text-destructive">*necessário alterar o valor</span></Label>
             <Input
               type="number"
               value={form.current_km}
-              onChange={(e) => setForm((current) => ({ ...current, current_km: e.target.value }))}
+              onChange={(e) => {
+                setKmEdited(true);
+                setForm((current) => ({ ...current, current_km: e.target.value }));
+              }}
+              placeholder="Informe uma KM maior que a atual"
               className="h-12 bg-secondary border-border"
             />
           </div>
@@ -271,6 +283,7 @@ const DriverFuelPage = () => {
             <Input
               value={form.station}
               onChange={(e) => setForm((current) => ({ ...current, station: e.target.value }))}
+              placeholder="Ex.: Ipiranga"
               className="h-12 bg-secondary border-border"
             />
           </div>
@@ -302,7 +315,7 @@ const DriverFuelPage = () => {
           </div>
 
           <Button
-            disabled={loading || !vehicle}
+            disabled={loading || !vehicle || !kmEdited}
             onClick={saveFueling}
             className="w-full h-12 text-base gradient-primary text-primary-foreground"
           >

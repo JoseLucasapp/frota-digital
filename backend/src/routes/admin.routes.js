@@ -1,4 +1,4 @@
-const { createAdminController, getAllAdminsController } = require('../controllers/admin.controller');
+const { createAdminController, getAllAdminsController, updateAdminController, requestAdminPasswordCodeController, verifyAdminPasswordCodeController, confirmAdminPasswordChangeController } = require('../controllers/admin.controller');
 const { attachUser } = require('../middlewares/attachUser.middleware');
 const { requireRole } = require('../security/role.guard');
 const { requireAuth } = require('../utils/jwt');
@@ -92,6 +92,38 @@ module.exports = (router) => {
     attachUser,
     requireRole("ADMIN"),
     async (req, res) => await getAllAdminsController(req, res),
+  );
+
+  router.put(
+    "/admin/:id",
+    requireAuth,
+    attachUser,
+    requireRole("ADMIN"),
+    async (req, res) => await updateAdminController(req, res),
+  );
+
+  router.post(
+    "/admin/password-code/request",
+    requireAuth,
+    attachUser,
+    requireRole("ADMIN"),
+    async (req, res) => await requestAdminPasswordCodeController(req, res),
+  );
+
+  router.post(
+    "/admin/password-code/verify",
+    requireAuth,
+    attachUser,
+    requireRole("ADMIN"),
+    async (req, res) => await verifyAdminPasswordCodeController(req, res),
+  );
+
+  router.post(
+    "/admin/password-code/confirm",
+    requireAuth,
+    attachUser,
+    requireRole("ADMIN"),
+    async (req, res) => await confirmAdminPasswordChangeController(req, res),
   );
 
 }

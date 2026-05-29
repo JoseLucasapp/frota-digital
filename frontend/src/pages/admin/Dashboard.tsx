@@ -5,6 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Badge } from "@/components/ui/badge";
 import { api, ApiError } from "@/lib/api";
 import { isNotificationRead } from "@/lib/notifications";
+import { translateMaintenanceStatus } from "@/lib/formatters";
 
 const AdminDashboard = () => {
   const [vehicles, setVehicles] = useState<any[]>([]);
@@ -129,7 +130,7 @@ const AdminDashboard = () => {
                     <p className="font-medium text-foreground text-sm">{item.type || 'Manutenção'} — {item.description}</p>
                     <p className="text-muted-foreground text-sm">Veículo: {item.vehicle_id}</p>
                   </div>
-                  <Badge>{item.status}</Badge>
+                  <Badge>{translateMaintenanceStatus(item.status)}</Badge>
                 </div>
               ))}
               {maintenances.length === 0 ? <p className="text-sm text-muted-foreground">Nenhuma manutenção encontrada.</p> : null}

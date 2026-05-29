@@ -179,7 +179,7 @@ const AdminVehicles = () => {
       plate: vehicle.plate || "",
       make: vehicle.make || "",
       model: vehicle.model || "",
-      year: vehicle.year || "",
+      year: vehicle.year ? String(vehicle.year) : "",
       fuel_type: vehicle.fuel_type || "",
       current_km: vehicle.current_km || "",
       status: vehicle.status || "active",
@@ -448,6 +448,7 @@ const AdminVehicles = () => {
                   value={form.plate}
                   onChange={(e) => setForm((current: typeof initialForm) => ({ ...current, plate: e.target.value }))}
                   className="h-12 bg-secondary border-border"
+                  placeholder="Ex.: ABC1D23"
                 />
               </div>
 
@@ -536,7 +537,7 @@ const AdminVehicles = () => {
 
               <div className="space-y-2">
                 <Label>{fieldLabels.fuel_type}</Label>
-                <Input value={form.fuel_type} readOnly className="h-12 bg-secondary border-border opacity-80" />
+<Input value={form.fuel_type} readOnly className="h-12 bg-secondary border-border opacity-80" placeholder="Preenchido automaticamente" />
               </div>
 
               <div className="space-y-2">
@@ -546,6 +547,7 @@ const AdminVehicles = () => {
                   value={form.current_km}
                   onChange={(e) => setForm((current: typeof initialForm) => ({ ...current, current_km: e.target.value }))}
                   className="h-12 bg-secondary border-border"
+                  placeholder="Ex.: 10123"
                 />
               </div>
 

@@ -11,6 +11,7 @@ import {
   Tooltip,
 } from "recharts";
 import { api, ApiError } from "@/lib/api";
+import { translateMaintenanceStatus } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -395,7 +396,7 @@ const AdminReports = () => {
                         {item.description || "Sem descrição"}
                       </p>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Status: {item.status || "—"} • Custo estimado: R${" "}
+                        Status: {translateMaintenanceStatus(item.status)} • Custo estimado: R${" "}
                         {Number(item.estimated_cost || 0).toLocaleString("pt-BR", {
                           minimumFractionDigits: 2,
                         })}

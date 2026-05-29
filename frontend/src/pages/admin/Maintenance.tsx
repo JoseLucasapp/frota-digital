@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { api, ApiError } from "@/lib/api";
 import { MAINTENANCE_PRIORITY_OPTIONS, MAINTENANCE_TYPE_OPTIONS } from "@/lib/vehicleCatalog";
+import { translateMaintenanceStatus, translateMaintenancePriority } from "@/lib/formatters";
 
 const initialForm = {
   vehicle_id: "",
@@ -16,6 +17,7 @@ const initialForm = {
   description: "",
   priority: "MEDIUM",
   estimated_cost: "",
+  current_km: "",
   status: "PENDING",
 };
 
@@ -26,6 +28,7 @@ const fieldLabels: Record<string, string> = {
   description: "Descrição",
   priority: "Prioridade",
   estimated_cost: "Custo estimado",
+  current_km: "Quilometragem atual",
   status: "Status",
 };
 
@@ -42,23 +45,11 @@ const AdminMaintenance = () => {
   const [saving, setSaving] = useState(false);
 
   const translatePriority = (value: string) => {
-    const option = MAINTENANCE_PRIORITY_OPTIONS.find((opt) => opt.value === value);
-    return option ? option.label : value;
+    return translateMaintenancePriority(value);
   }
 
   const translateStatus = (value: string) => {
-    switch (value) {
-      case "PENDING":
-        return "Pendente";
-      case "IN_PROGRESS":
-        return "Em andamento";
-      case "COMPLETED":
-        return "Concluída";
-      case "CANCELLED":
-        return "Cancelada";
-      default:
-        return value;
-    }
+    return translateMaintenanceStatus(value);
   }
 
   const load = async () => {
@@ -96,6 +87,20 @@ const AdminMaintenance = () => {
     [mechanics]
   );
 
+  useEffect(() => {
+    if (!form.vehicle_id) return;
+    const selectedVehicle = vehiclesMap[form.vehicle_id];
+    if (!selectedVehicle) return;
+
+    setForm((current: any) => ({
+      ...current,
+      current_km:
+        selectedVehicle.current_km != null && selectedVehicle.current_km !== ""
+          ? current.current_km || String(selectedVehicle.current_km)
+          : current.current_km,
+    }));
+  }, [form.vehicle_id, vehiclesMap]);
+
   const filtered = useMemo(
     () =>
       items.filter((item) => {
@@ -131,6 +136,7 @@ const AdminMaintenance = () => {
       description: item.description || "",
       priority: item.priority || "",
       estimated_cost: item.estimated_cost || "",
+      current_km: item.current_km || vehiclesMap[item.vehicle_id]?.current_km || "",
       status: item.status || "PENDING",
     });
     setModalOpen(true);
@@ -141,10 +147,23 @@ const AdminMaintenance = () => {
       setSaving(true);
       setError(null);
 
+      if (!form.vehicle_id) {
+        setError("Selecione um veículo.");
+        return;
+      }
+
+      const vehicleKm = Number(vehiclesMap[form.vehicle_id]?.current_km || 0);
+      const nextKm = Number(form.current_km);
+      if (form.current_km && (!Number.isFinite(nextKm) || nextKm < vehicleKm)) {
+        setError(`A quilometragem atual deve ser maior ou igual a ${vehicleKm}.`);
+        return;
+      }
+
       const payload = {
         ...form,
         mechanic_id: form.mechanic_id || null,
         estimated_cost: form.estimated_cost ? Number(form.estimated_cost) : null,
+        current_km: form.current_km ? Number(form.current_km) : null,
       };
 
       if (editing) {
@@ -348,6 +367,17 @@ const AdminMaintenance = () => {
                   type="number"
                   value={String(form.estimated_cost ?? "")}
                   onChange={(e) => setForm((current: any) => ({ ...current, estimated_cost: e.target.value }))}
+                  className="h-12 bg-secondary border-border"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>{fieldLabels.current_km}</Label>
+                <Input
+                  type="number"
+                  value={String(form.current_km ?? "")}
+                  onChange={(e) => setForm((current: any) => ({ ...current, current_km: e.target.value }))}
+                  placeholder="Preenchido pelo veículo"
                   className="h-12 bg-secondary border-border"
                 />
               </div>

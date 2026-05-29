@@ -6,6 +6,45 @@ const {
 } = require("../utils/supabaseBucket");
 const { ensureAdminScope } = require("./scope.service");
 
+
+const applyVehicleKm = async ({ vehicleId, currentKm, adminId }) => {
+    if (!vehicleId || currentKm === undefined || currentKm === null || currentKm === "") return;
+
+    const nextKm = Number(currentKm);
+    if (!Number.isFinite(nextKm) || nextKm < 0) {
+        const error = new Error("Quilometragem atual inválida.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const { data: vehicle, error: vehicleError } = await supabase
+        .from("vehicles")
+        .select("id, current_km")
+        .eq("id", vehicleId)
+        .maybeSingle();
+
+    if (vehicleError) throw vehicleError;
+    if (!vehicle) {
+        const error = new Error("Veículo não encontrado");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    const previousKm = Number(vehicle.current_km || 0);
+    if (nextKm < previousKm) {
+        const error = new Error(`A quilometragem atual deve ser maior ou igual a ${previousKm}.`);
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (nextKm !== previousKm) {
+        let update = supabase.from("vehicles").update({ current_km: nextKm }).eq("id", vehicleId);
+        if (adminId) update = update.eq("admin_id", adminId);
+        const { error } = await update;
+        if (error) throw error;
+    }
+};
+
 const resolveFuelingAdminId = async (data, user) => {
     if (user?.role === "ADMIN") {
         return ensureAdminScope(user);
@@ -36,6 +75,8 @@ const createFuelingService = async (data, user) => {
     if (adminId) {
         payload.admin_id = adminId;
     }
+
+    await applyVehicleKm({ vehicleId: payload.vehicle_id, currentKm: payload.current_km, adminId });
 
     const { data: result, error } = await supabase
         .from("fuelings")
@@ -106,6 +147,8 @@ const updateFuelingService = async (id, data, user) => {
     if (!id) {
         throw new Error("id is required");
     }
+
+    await applyVehicleKm({ vehicleId: data.vehicle_id, currentKm: data.current_km, adminId: user?.role === "ADMIN" ? ensureAdminScope(user) : null });
 
     let request = supabase.from("fuelings").update(data).eq("id", id);
 

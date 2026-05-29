@@ -33,7 +33,7 @@ describe("notifications.service", () => {
         const result = await createNotificationsService({ title: "Reminder" });
 
         expect(supabase.from).toHaveBeenCalledWith("notifications");
-        expect(insert).toHaveBeenCalledWith({ title: "Reminder" });
+        expect(insert).toHaveBeenCalledWith({ title: "Reminder", is_read: false, read: false });
         expect(result).toEqual(fakeNotification);
     });
 

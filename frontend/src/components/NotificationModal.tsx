@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bell, X, FileText, Wrench, Fuel, AlertTriangle } from "lucide-react";
+import { Bell, X, FileText, Wrench, Fuel, AlertTriangle, Check } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { isNotificationRead } from "@/lib/notifications";
+import { Button } from "@/components/ui/button";
 
 const typeIcons = {
   document: FileText,
@@ -18,16 +19,29 @@ const typeColors = {
   alert: "text-primary",
 };
 
+type NotificationItem = {
+  id: string;
+  title?: string;
+  message?: string;
+  type?: keyof typeof typeIcons | string;
+  created_at?: string;
+  date?: string;
+  read?: boolean | null;
+  is_read?: boolean | null;
+};
+
 interface Props {
   open: boolean;
   onClose: () => void;
+  onNotificationsChange?: () => void;
 }
 
-const NotificationModal = ({ open, onClose }: Props) => {
+const NotificationModal = ({ open, onClose, onNotificationsChange }: Props) => {
   const [selected, setSelected] = useState<string | null>(null);
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [markingReadId, setMarkingReadId] = useState<string | null>(null);
 
   const user = useMemo(() => getAuthUser(), []);
   const selectedNotif = notifications.find((n) => n.id === selected);
@@ -41,7 +55,7 @@ const NotificationModal = ({ open, onClose }: Props) => {
         setError(null);
         setSelected(null);
 
-        const response = await api.get<{ data: any[] }>("/notifications", { limit: 20 });
+        const response = await api.get<{ data: NotificationItem[] }>("/notifications", { limit: 20 });
         setNotifications(response.data || []);
       } catch (err) {
         setError(err instanceof ApiError ? err.message : "Erro ao carregar notificações");
@@ -53,11 +67,10 @@ const NotificationModal = ({ open, onClose }: Props) => {
     fetchNotifications();
   }, [open, user?.id]);
 
-  const openNotification = async (notification: any) => {
-    setSelected(notification.id);
-
+  const markAsRead = async (notification: NotificationItem) => {
     if (isNotificationRead(notification)) return;
 
+    setMarkingReadId(notification.id);
     setNotifications((current) =>
       current.map((item) =>
         item.id === notification.id ? { ...item, read: true, is_read: true } : item
@@ -66,12 +79,16 @@ const NotificationModal = ({ open, onClose }: Props) => {
 
     try {
       await api.put(`/notifications/${notification.id}`, { is_read: true });
+      onNotificationsChange?.();
     } catch {
       setNotifications((current) =>
         current.map((item) =>
           item.id === notification.id ? { ...item, read: false, is_read: false } : item
         )
       );
+      setError("Erro ao marcar notificação como lida");
+    } finally {
+      setMarkingReadId(null);
     }
   };
 
@@ -100,6 +117,16 @@ const NotificationModal = ({ open, onClose }: Props) => {
             </div>
             <p className="text-foreground whitespace-pre-wrap">{selectedNotif.message}</p>
             <p className="text-sm text-muted-foreground">{new Date(selectedNotif.created_at || selectedNotif.date).toLocaleString("pt-BR")}</p>
+            {!isNotificationRead(selectedNotif) ? (
+              <Button
+                onClick={() => markAsRead(selectedNotif)}
+                disabled={markingReadId === selectedNotif.id}
+                className="w-full gap-2 gradient-primary text-primary-foreground"
+              >
+                <Check className="w-4 h-4" />
+                {markingReadId === selectedNotif.id ? "Marcando..." : "Marcar como lido"}
+              </Button>
+            ) : null}
           </div>
         ) : (
           <div className="space-y-2">
@@ -110,14 +137,25 @@ const NotificationModal = ({ open, onClose }: Props) => {
               const read = isNotificationRead(n);
 
               return (
-                <button key={n.id} onClick={() => openNotification(n)} className="w-full flex items-start gap-3 p-3 rounded-xl hover:bg-secondary/50 transition-colors text-left">
-                  <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${read ? "bg-muted" : "bg-primary"}`} />
-                  <Icon className={`w-5 h-5 flex-shrink-0 mt-0.5 ${typeColors[key] || "text-primary"}`} />
-                  <div className="min-w-0">
-                    <p className={`font-medium text-sm ${read ? "text-muted-foreground" : "text-foreground"}`}>{n.title}</p>
-                    <p className="text-sm text-muted-foreground truncate">{n.message}</p>
-                  </div>
-                </button>
+                <div key={n.id} className="w-full flex items-start gap-3 rounded-xl p-3 hover:bg-secondary/50 transition-colors">
+                  <button onClick={() => setSelected(n.id)} className="flex min-w-0 flex-1 items-start gap-3 text-left">
+                    <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${read ? "bg-muted" : "bg-primary"}`} />
+                    <Icon className={`w-5 h-5 flex-shrink-0 mt-0.5 ${typeColors[key] || "text-primary"}`} />
+                    <div className="min-w-0">
+                      <p className={`font-medium text-sm ${read ? "text-muted-foreground" : "text-foreground"}`}>{n.title}</p>
+                      <p className="text-sm text-muted-foreground truncate">{n.message}</p>
+                    </div>
+                  </button>
+                  {!read ? (
+                    <button
+                      onClick={() => markAsRead(n)}
+                      disabled={markingReadId === n.id}
+                      className="shrink-0 rounded-lg border border-border px-2 py-1 text-xs font-medium text-primary hover:bg-secondary disabled:opacity-60"
+                    >
+                      Lido
+                    </button>
+                  ) : null}
+                </div>
               );
             })}
           </div>

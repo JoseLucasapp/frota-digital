@@ -112,6 +112,10 @@ const resolveNotificationAdminId = async (payload, user) => {
 
 const createNotificationsService = async (data, user) => {
     const payload = { ...data };
+
+    if (!hasOwn(payload, "read") && !hasOwn(payload, "is_read")) {
+        payload.is_read = false;
+    }
     const adminId = await resolveNotificationAdminId(payload, user);
 
     if (adminId) {
@@ -141,36 +145,50 @@ const getAllNotificationsService = async (query = {}, user) => {
     const from = (page - 1) * limit;
     const to = from + limit - 1;
 
-    let request = supabase
-        .from("notifications")
-        .select("*", { count: "exact" });
+    const readFilters = query.unread_only === "true" || query.unread_only === true
+        ? ["is_read", "read"]
+        : [null];
 
-    if (user?.role === "ADMIN") {
-        request = request.eq("admin_id", ensureAdminScope(user));
+    let lastError = null;
+
+    for (const readField of readFilters) {
+        let request = supabase
+            .from("notifications")
+            .select("*", { count: "exact" });
+
+        if (user?.role === "ADMIN") {
+            request = request.eq("admin_id", ensureAdminScope(user));
+        }
+
+        if (user?.role === "DRIVER") {
+            request = request.eq("driver_id", user.id);
+        }
+
+        if (query.driver_id) request = request.eq("driver_id", query.driver_id);
+        if (query.admin_id) request = request.eq("admin_id", query.admin_id);
+        if (readField) request = request.eq(readField, false);
+
+        request = request.order("created_at", { ascending: sortOrder });
+        request = request.range(from, to);
+
+        const { data, error, count } = await request;
+        if (!error) {
+            return {
+                data: (data || []).map(normalizeNotificationRow),
+                pagination: {
+                    page,
+                    limit,
+                    total: count || 0,
+                    totalPages: Math.ceil((count || 0) / limit),
+                },
+            };
+        }
+
+        lastError = error;
+        if (!readField || !isReadColumnError(error)) throw error;
     }
 
-    if (user?.role === "DRIVER") {
-        request = request.eq("driver_id", user.id);
-    }
-
-    if (query.driver_id) request = request.eq("driver_id", query.driver_id);
-    if (query.admin_id) request = request.eq("admin_id", query.admin_id);
-
-    request = request.order("created_at", { ascending: sortOrder });
-    request = request.range(from, to);
-
-    const { data, error, count } = await request;
-    if (error) throw error;
-
-    return {
-        data: (data || []).map(normalizeNotificationRow),
-        pagination: {
-            page,
-            limit,
-            total: count || 0,
-            totalPages: Math.ceil((count || 0) / limit),
-        },
-    };
+    throw lastError;
 };
 
 const getNotificationByIdService = async (id, user) => {

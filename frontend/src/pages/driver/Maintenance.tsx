@@ -8,12 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "react-router-dom";
+import { translateMaintenancePriority, translateMaintenanceStatus } from "@/lib/formatters";
 
 const initialForm = {
   type: "",
   description: "",
   priority: "MEDIUM",
   estimated_cost: "",
+  current_km: "",
 };
 
 const formatMaintenanceError = (err: unknown, fallback: string) => {
@@ -69,6 +71,17 @@ const DriverMaintenancePage = () => {
     return vehicles.find((vehicle) => vehicle.id === currentLoan?.vehicle_id) || null;
   }, [vehicles, currentLoan?.vehicle_id]);
 
+  useEffect(() => {
+    if (!currentVehicle) return;
+    setForm((current) => ({
+      ...current,
+      current_km:
+        currentVehicle.current_km != null && currentVehicle.current_km !== ""
+          ? String(currentVehicle.current_km)
+          : current.current_km,
+    }));
+  }, [currentVehicle]);
+
   const myMaintenances = useMemo(() => {
     if (!currentVehicle?.id) return [];
     return maintenances.filter((item) => item.vehicle_id === currentVehicle.id);
@@ -87,6 +100,14 @@ const DriverMaintenancePage = () => {
       return;
     }
 
+    const previousKm = Number(currentVehicle.current_km || 0);
+    const nextKm = Number(form.current_km || 0);
+    if (!Number.isFinite(nextKm) || nextKm < previousKm) {
+      setError(`A quilometragem atual deve ser maior ou igual a ${previousKm}.`);
+      setMessage(null);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -99,6 +120,7 @@ const DriverMaintenancePage = () => {
         priority: form.priority,
         status: "PENDING",
         estimated_cost: form.estimated_cost ? Number(form.estimated_cost) : undefined,
+        current_km: form.current_km ? Number(form.current_km) : undefined,
       });
 
       setForm(initialForm);
@@ -120,10 +142,6 @@ const DriverMaintenancePage = () => {
           </button>
           <h1 className="text-2xl font-bold text-foreground">Manutenções</h1>
         </div>
-
-        <p className="text-muted-foreground">
-          {currentVehicle ? `Veículo atual: ${currentVehicle.plate}` : "Nenhum veículo associado"}
-        </p>
       </div>
 
       {bootLoading ? <div className="glass-card p-4 text-sm text-muted-foreground">Carregando...</div> : null}
@@ -169,6 +187,17 @@ const DriverMaintenancePage = () => {
           </div>
 
           <div className="space-y-2">
+            <Label>KM atual</Label>
+            <Input
+              type="number"
+              value={form.current_km}
+              onChange={(e) => setForm((current) => ({ ...current, current_km: e.target.value }))}
+              placeholder="Preenchido pelo veículo"
+              className="h-12 bg-secondary border-border"
+            />
+          </div>
+
+          <div className="space-y-2">
             <Label>Descrição do problema</Label>
             <Textarea
               value={form.description}
@@ -200,8 +229,8 @@ const DriverMaintenancePage = () => {
               <p className="text-sm text-muted-foreground">{item.description || "Sem descrição"}</p>
 
               <div className="flex flex-wrap items-center gap-2 mt-3">
-                {item.priority ? <Badge>{item.priority}</Badge> : null}
-                {item.status ? <Badge>{item.status}</Badge> : null}
+                {item.priority ? <Badge>{translateMaintenancePriority(item.priority)}</Badge> : null}
+                {item.status ? <Badge>{translateMaintenanceStatus(item.status)}</Badge> : null}
               </div>
 
               {item.estimated_cost ? (

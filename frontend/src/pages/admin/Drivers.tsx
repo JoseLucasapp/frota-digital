@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { api, ApiError } from "@/lib/api";
+import { isValidCpf, maskCpf, onlyDigits } from "@/lib/formatters";
 
 const initialForm = {
   name: "",
@@ -107,12 +108,17 @@ const AdminDrivers = () => {
       setSaving(true);
       setError(null);
 
+      if (!isValidCpf(form.cpf)) {
+        setError("Informe um CPF válido.");
+        return;
+      }
+
       if (editDriver) {
-        const payload = { ...form } as any;
+        const payload = { ...form, cpf: onlyDigits(form.cpf) } as any;
         if (!payload.password) delete payload.password;
         await api.put(`/driver/${editDriver.id}`, payload);
       } else {
-        await api.post("/driver", form);
+        await api.post("/driver", { ...form, cpf: onlyDigits(form.cpf) });
       }
 
       setModalOpen(false);
@@ -141,7 +147,7 @@ const AdminDrivers = () => {
 
       await api.put(`/driver/${driver.id}`, {
         name: driver.name || "",
-        cpf: driver.cpf || "",
+        cpf: maskCpf(driver.cpf || ""),
         email: driver.email || "",
         phone: driver.phone || "",
         cnh_category: driver.cnh_category || "",
@@ -327,10 +333,20 @@ const AdminDrivers = () => {
                 <div key={key} className="space-y-2">
                   <Label>{label}</Label>
                   <Input
-                    value={(form as any)[key]}
+                    value={key === "cpf" ? maskCpf((form as any)[key]) : (form as any)[key]}
                     onChange={(e) =>
-                      setForm((current) => ({ ...current, [key]: e.target.value }))
+                      setForm((current) => ({
+                        ...current,
+                        [key]: key === "cpf" ? maskCpf(e.target.value) : e.target.value,
+                      }))
                     }
+                    placeholder={{
+                      name: "Ex.: João Silva",
+                      cpf: "000.000.000-00",
+                      email: "joao@email.com",
+                      phone: "(83) 99999-9999",
+                      cnh_category: "Ex.: A-B-C-D",
+                    }[key]}
                     className="h-12 bg-secondary border-border"
                   />
                 </div>

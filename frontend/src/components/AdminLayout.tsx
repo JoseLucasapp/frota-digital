@@ -10,6 +10,11 @@ import { clearAuthSession, getAuthUser } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { isNotificationRead } from "@/lib/notifications";
 
+type NotificationReadState = {
+  read?: boolean | null;
+  is_read?: boolean | null;
+};
+
 interface AdminLayoutProps {
   children: ReactNode;
 }
@@ -48,8 +53,8 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
 
   const loadUnreadNotifications = useCallback(async () => {
     try {
-      const response = await api.get<{ data: any[] }>("/notifications", { limit: 50 });
-      setUnreadNotifications((response.data || []).filter((item) => !isNotificationRead(item)).length);
+      const response = await api.get<{ data: NotificationReadState[]; pagination?: { total?: number } }>("/notifications", { limit: 1, unread_only: true });
+      setUnreadNotifications(response.pagination?.total ?? (response.data || []).filter((item) => !isNotificationRead(item)).length);
     } catch {
       setUnreadNotifications(0);
     }
@@ -180,7 +185,7 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
         <div className="min-w-0 max-w-full overflow-x-hidden p-4 lg:p-8">{children}</div>
       </main>
 
-      <NotificationModal open={notifOpen} onClose={() => { setNotifOpen(false); loadUnreadNotifications(); }} />
+      <NotificationModal open={notifOpen} onClose={() => { setNotifOpen(false); loadUnreadNotifications(); }} onNotificationsChange={loadUnreadNotifications} />
     </div>
   );
 };

@@ -8,6 +8,7 @@ const {
   deleteFileFromBucket,
 } = require("../utils/supabaseBucket");
 const { ensureAdminScope } = require("./scope.service");
+const { assertValidCnpj, onlyDigits } = require("../utils/document");
 
 const DOCUMENT_TYPE_MAP = {
   cnpj: {
@@ -30,6 +31,7 @@ const DOCUMENT_TYPE_MAP = {
 const createMechanicService = async (data, user) => {
   const payload = {
     ...data,
+    cnpj: assertValidCnpj(data.cnpj),
     status: data.status || MECHANIC_STATUS.ACTIVE,
   };
 
@@ -75,7 +77,7 @@ const getAllMechanicsService = async (query = {}, user) => {
     request = request.eq("admin_id", ensureAdminScope(user));
   }
 
-  if (query.cnpj) request = request.eq("cnpj", query.cnpj);
+  if (query.cnpj) request = request.eq("cnpj", onlyDigits(query.cnpj));
   if (query.name) request = request.ilike("name", `%${query.name}%`);
   if (query.status) request = request.eq("status", query.status);
 
@@ -126,6 +128,10 @@ const updateMechanicService = async (id, data, user) => {
   if (!data || typeof data !== "object") throw new Error("data is required");
 
   const payload = { ...data };
+
+  if ("cnpj" in payload) {
+    payload.cnpj = payload.cnpj ? assertValidCnpj(payload.cnpj) : payload.cnpj;
+  }
 
   if ("password" in payload) {
     if (payload.password) {

@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { api, ApiError } from "@/lib/api";
+import { isValidCnpj, maskCnpj, onlyDigits } from "@/lib/formatters";
 
 const initialForm = {
   name: "",
@@ -87,7 +88,7 @@ const AdminMechanics = () => {
     setEditing(mechanic);
     setForm({
       name: mechanic.name || "",
-      cnpj: mechanic.cnpj || "",
+      cnpj: maskCnpj(mechanic.cnpj || ""),
       email: mechanic.email || "",
       phone: mechanic.phone || "",
       status: mechanic.status || "active",
@@ -101,12 +102,17 @@ const AdminMechanics = () => {
       setSaving(true);
       setError(null);
 
+      if (!isValidCnpj(form.cnpj)) {
+        setError("Informe um CNPJ válido.");
+        return;
+      }
+
       if (editing) {
-        const payload = { ...form } as any;
+        const payload = { ...form, cnpj: onlyDigits(form.cnpj) } as any;
         if (!payload.password) delete payload.password;
         await api.put(`/mechanic/${editing.id}`, payload);
       } else {
-        await api.post("/mechanic", form);
+        await api.post("/mechanic", { ...form, cnpj: onlyDigits(form.cnpj) });
       }
 
       setModalOpen(false);
@@ -135,7 +141,7 @@ const AdminMechanics = () => {
 
       await api.put(`/mechanic/${mechanic.id}`, {
         name: mechanic.name || "",
-        cnpj: mechanic.cnpj || "",
+        cnpj: maskCnpj(mechanic.cnpj || ""),
         email: mechanic.email || "",
         phone: mechanic.phone || "",
         status,
@@ -300,12 +306,21 @@ const AdminMechanics = () => {
             <div className="grid md:grid-cols-2 gap-4">
               {["name", "cnpj", "email", "phone"].map((key) => (
                 <div key={key} className="space-y-2">
-                  <Label>{key.charAt(0).toUpperCase() + key.slice(1)}</Label>
+                  <Label>{{ name: "Nome", cnpj: "CNPJ", email: "Email", phone: "Telefone" }[key]}</Label>
                   <Input
-                    value={(form as any)[key]}
+                    value={key === "cnpj" ? maskCnpj((form as any)[key]) : (form as any)[key]}
                     onChange={(e) =>
-                      setForm((current) => ({ ...current, [key]: e.target.value }))
+                      setForm((current) => ({
+                        ...current,
+                        [key]: key === "cnpj" ? maskCnpj(e.target.value) : e.target.value,
+                      }))
                     }
+                    placeholder={{
+                      name: "Ex.: Oficina Central",
+                      cnpj: "00.000.000/0000-00",
+                      email: "oficina@email.com",
+                      phone: "(83) 99999-9999",
+                    }[key]}
                     className="h-12 bg-secondary border-border"
                   />
                 </div>

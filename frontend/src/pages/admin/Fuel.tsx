@@ -127,6 +127,18 @@ const AdminFuel = () => {
       setSaving(true);
       setError(null);
 
+      if (!form.vehicle_id) {
+        setError("Selecione um veículo.");
+        return;
+      }
+
+      const vehicleKm = Number(vehicleById[form.vehicle_id]?.current_km || 0);
+      const nextKm = Number(form.current_km);
+      if (!Number.isFinite(nextKm) || nextKm < vehicleKm) {
+        setError(`A quilometragem atual deve ser maior ou igual a ${vehicleKm}.`);
+        return;
+      }
+
       const payload = {
         ...form,
         liters: Number(form.liters),
@@ -333,6 +345,7 @@ const AdminFuel = () => {
                   value={String(form.liters ?? "")}
                   onChange={(e) => setForm((current: any) => ({ ...current, liters: e.target.value }))}
                   className="h-12 bg-secondary border-border"
+                  placeholder="Ex.: 40"
                 />
               </div>
 
@@ -345,6 +358,7 @@ const AdminFuel = () => {
                     setForm((current: any) => ({ ...current, price_per_liter: e.target.value }))
                   }
                   className="h-12 bg-secondary border-border"
+                  placeholder="Ex.: 5,89"
                 />
               </div>
 
@@ -355,6 +369,7 @@ const AdminFuel = () => {
                   value={String(form.current_km ?? "")}
                   onChange={(e) => setForm((current: any) => ({ ...current, current_km: e.target.value }))}
                   className="h-12 bg-secondary border-border"
+                  placeholder="Preenchido pelo veículo"
                 />
               </div>
 
@@ -364,6 +379,7 @@ const AdminFuel = () => {
                   value={String(form.station ?? "")}
                   onChange={(e) => setForm((current: any) => ({ ...current, station: e.target.value }))}
                   className="h-12 bg-secondary border-border"
+                  placeholder="Ex.: Ipiranga"
                 />
               </div>
 

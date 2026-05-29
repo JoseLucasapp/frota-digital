@@ -1,34 +1,48 @@
-require('dotenv').config();
-const nodemailer = require('nodemailer');
+require("dotenv").config();
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+const SENDGRID_URL = "https://api.sendgrid.com/v3/mail/send";
+const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || "support@frota-digital.online";
 
-
-
-const mailOptions = {
-  from: process.env.EMAIL_USER,
-  to: '',
-  subject: '',
-  html: `<p>Seu email foi cadastrado com sucesso no <strong>Frota Digital</strong>. Agora você pode acessar sua conta e aproveitar os recursos disponíveis.<br> Use o email: <a></a>, ao efetuar o primeiro acesso não é necessário informar a senha.</p>`,
-};
+const defaultHtml = (to) => `
+  <p>
+    Seu email foi cadastrado com sucesso no <strong>Frota Digital</strong>.
+    Agora você pode acessar sua conta e aproveitar os recursos disponíveis.<br>
+    Use o email: <a>${to}</a>, ao efetuar o primeiro acesso não é necessário informar a senha.
+  </p>
+`;
 
 const sendEmail = async (to, subject) => {
   try {
-    let htmlContent = mailOptions.html.replace('<a></a>', `<a>${to}</a>`);
-    const options = { ...mailOptions, to, subject, html: htmlContent };
-    await transporter.sendMail(options);
+    if (!process.env.SENDGRID_API_KEY) {
+      console.warn("SENDGRID_API_KEY não configurada. Email não enviado.");
+      return;
+    }
+
+    const response = await fetch(SENDGRID_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        personalizations: [{ to: [{ email: to }] }],
+        from: { email: FROM_EMAIL, name: "Frota Digital" },
+        subject,
+        content: [{ type: "text/html", value: defaultHtml(to) }],
+      }),
+    });
+
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(message || `SendGrid retornou status ${response.status}`);
+    }
+
     console.log(`Email sent to ${to}`);
   } catch (error) {
     console.error(`Failed to send email to ${to}:`, error);
   }
-}
+};
 
 module.exports = {
   sendEmail,
-}
+};

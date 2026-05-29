@@ -6,6 +6,7 @@ import { getAuthUser, setAuthSession, getAuthToken } from "@/lib/auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const AdminProfile = () => {
   const authUser = getAuthUser();
@@ -17,13 +18,17 @@ const AdminProfile = () => {
     phone: authUser?.phone || "",
     institution: authUser?.institution || "",
     cnpj: authUser?.cnpj || "",
-    password: "",
   });
 
   const [loading, setLoading] = useState(false);
   const [bootLoading, setBootLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [passwordStep, setPasswordStep] = useState<"request" | "code" | "password">("request");
+  const [passwordCode, setPasswordCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   const reloadProfile = async () => {
     if (!authUser?.id) return;
@@ -48,7 +53,6 @@ const AdminProfile = () => {
           phone: current.phone || "",
           institution: current.institution || "",
           cnpj: current.cnpj || "",
-          password: "",
         }));
       }
     } catch (err) {
@@ -75,10 +79,6 @@ const AdminProfile = () => {
         phone: form.phone,
       };
 
-      if (form.password) {
-        payload.password = form.password;
-      }
-
       const response = await api.put(`/admin/${authUser.id}`, payload);
 
       const updatedUser = {
@@ -94,15 +94,70 @@ const AdminProfile = () => {
         (response as any)?.message || "Perfil atualizado com sucesso"
       );
 
-      setForm((current) => ({
-        ...current,
-        password: "",
-      }));
+
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Erro ao atualizar perfil");
     } finally {
       setLoading(false);
     }
+  };
+
+
+  const requestPasswordCode = async () => {
+    try {
+      setPasswordLoading(true);
+      setError(null);
+      setMessage(null);
+      const response = await api.post<{ message?: string }>("/admin/password-code/request");
+      setMessage(response?.message || "Código enviado para o email cadastrado.");
+      setPasswordStep("code");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erro ao enviar código");
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  const verifyPasswordCode = async () => {
+    try {
+      setPasswordLoading(true);
+      setError(null);
+      setMessage(null);
+      await api.post("/admin/password-code/verify", { code: passwordCode });
+      setPasswordStep("password");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erro ao confirmar código");
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  const confirmPasswordChange = async () => {
+    try {
+      setPasswordLoading(true);
+      setError(null);
+      setMessage(null);
+      const response = await api.post<{ message?: string }>("/admin/password-code/confirm", {
+        code: passwordCode,
+        password: newPassword,
+      });
+      setMessage(response?.message || "Senha alterada com sucesso.");
+      setPasswordModalOpen(false);
+      setPasswordStep("request");
+      setPasswordCode("");
+      setNewPassword("");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erro ao alterar senha");
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  const openPasswordModal = () => {
+    setPasswordModalOpen(true);
+    setPasswordStep("request");
+    setPasswordCode("");
+    setNewPassword("");
   };
 
   return (
@@ -213,14 +268,15 @@ const AdminProfile = () => {
             </div>
 
             <div className="space-y-2">
-              <Label>Nova senha</Label>
-              <Input
-                type="password"
-                value={form.password}
-                onChange={(e) => setForm((current) => ({ ...current, password: e.target.value }))}
-                className="h-12 bg-secondary border-border"
-                placeholder="Deixe vazio para manter"
-              />
+              <Label>Senha</Label>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={openPasswordModal}
+                className="h-12 w-full justify-center bg-secondary border-border"
+              >
+                Alterar senha por código de email
+              </Button>
             </div>
           </div>
 
@@ -233,6 +289,61 @@ const AdminProfile = () => {
           </Button>
         </div>
       </div>
+
+      <Dialog open={passwordModalOpen} onOpenChange={setPasswordModalOpen}>
+        <DialogContent className="glass-card border-border">
+          <DialogHeader>
+            <DialogTitle>Alterar senha</DialogTitle>
+          </DialogHeader>
+
+          {passwordStep === "request" ? (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Enviaremos um código para {form.email || "o email cadastrado"}.
+              </p>
+              <Button disabled={passwordLoading} onClick={requestPasswordCode} className="w-full h-12 gradient-primary text-primary-foreground">
+                {passwordLoading ? "Enviando..." : "Enviar código"}
+              </Button>
+            </div>
+          ) : null}
+
+          {passwordStep === "code" ? (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Código recebido por email</Label>
+                <Input
+                  value={passwordCode}
+                  onChange={(e) => setPasswordCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="Digite o código de 6 dígitos"
+                  className="h-12 bg-secondary border-border"
+                />
+              </div>
+              <Button disabled={passwordLoading || passwordCode.length !== 6} onClick={verifyPasswordCode} className="w-full h-12 gradient-primary text-primary-foreground">
+                {passwordLoading ? "Confirmando..." : "Confirmar código"}
+              </Button>
+            </div>
+          ) : null}
+
+          {passwordStep === "password" ? (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Nova senha</Label>
+                <Input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Digite a nova senha"
+                  className="h-12 bg-secondary border-border"
+                />
+              </div>
+              <Button disabled={passwordLoading || newPassword.length < 6} onClick={confirmPasswordChange} className="w-full h-12 gradient-primary text-primary-foreground">
+                {passwordLoading ? "Salvando..." : "Alterar senha"}
+              </Button>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
     </motion.div>
   );
 };

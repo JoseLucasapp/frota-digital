@@ -1,8 +1,9 @@
 const supabase = require('../config/supabase');
 const { hashPassword } = require('../utils/hash');
+const { assertValidCnpj, onlyDigits } = require('../utils/document');
 
 const createAdminService = async (data) => {
-  const payload = { ...data };
+  const payload = { ...data, cnpj: assertValidCnpj(data.cnpj) };
   payload.password_hash = await hashPassword(payload.password);
   delete payload.password;
 
@@ -32,7 +33,7 @@ const getAllAdminsService = async ({
 
   if (email) query = query.eq("email", email);
   if (name) query = query.ilike("name", `%${name}%`);
-  if (cnpj) query = query.eq("cnpj", cnpj);
+  if (cnpj) query = query.eq("cnpj", onlyDigits(cnpj));
   if (institution) query = query.ilike("institution", `%${institution}%`);
 
   const { data, error, count } = await query.range(from, to);
@@ -51,7 +52,32 @@ const getAllAdminsService = async ({
   };
 };
 
+const updateAdminService = async (id, data) => {
+  if (!id) throw new Error("ID é obrigatório.");
+
+  const payload = {
+    name: data.name,
+    phone: data.phone,
+  };
+
+  Object.keys(payload).forEach((key) => {
+    if (payload[key] === undefined) delete payload[key];
+  });
+
+  const { data: result, error } = await supabase
+    .from("admins")
+    .update(payload)
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  delete result.password_hash;
+  return result;
+};
+
 module.exports = {
   createAdminService,
-  getAllAdminsService
+  getAllAdminsService,
+  updateAdminService,
 }

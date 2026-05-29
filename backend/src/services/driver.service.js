@@ -8,6 +8,7 @@ const {
   deleteFileFromBucket,
 } = require("../utils/supabaseBucket");
 const { ensureAdminScope, applyAdminScope } = require("./scope.service");
+const { assertValidCpf, onlyDigits } = require("../utils/document");
 
 const DOCUMENT_TYPE_MAP = {
   cpf: {
@@ -40,6 +41,7 @@ const DOCUMENT_TYPE_MAP = {
 const createDriverService = async (data, user) => {
   const payload = {
     ...data,
+    cpf: assertValidCpf(data.cpf),
     status: data.status || DRIVER_STATUS.ACTIVE,
   };
 
@@ -89,7 +91,7 @@ const getAllDriversService = async (query = {}, user) => {
     request = applyAdminScope(request, ensureAdminScope(user));
   }
 
-  if (query.cpf) request = request.eq("cpf", query.cpf);
+  if (query.cpf) request = request.eq("cpf", onlyDigits(query.cpf));
   if (query.name) request = request.ilike("name", `%${query.name}%`);
   if (query.status) request = request.eq("status", query.status);
 
@@ -140,6 +142,10 @@ const updateDriverService = async (id, data, user) => {
   if (!data || typeof data !== "object") throw new Error("data is required");
 
   const payload = { ...data };
+
+  if ("cpf" in payload) {
+    payload.cpf = payload.cpf ? assertValidCpf(payload.cpf) : payload.cpf;
+  }
 
   if ("password" in payload) {
     if (payload.password) {
