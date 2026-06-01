@@ -87,12 +87,28 @@
     --chart-4: 210 100% 50%;
     --chart-5: 0 72% 51%;
   }
+
+  @keyframes toast-progress {
+    from {
+      transform: scaleX(1);
+    }
+
+    to {
+      transform: scaleX(0);
+    }
+  }
+
+  .animate-toast-progress {
+    animation: toast-progress 5s linear forwards;
+  }
+
 }
 
 @layer base {
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', sans-serif;
@@ -104,15 +120,19 @@
   .glass-card {
     @apply bg-card/80 backdrop-blur-xl border border-border/50 rounded-xl shadow-lg;
   }
+
   .gradient-primary {
     background: linear-gradient(135deg, hsl(252, 100%, 65%), hsl(280, 80%, 55%));
   }
+
   .gradient-surface {
     background: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--background)) 100%);
   }
+
   .glow-primary {
     box-shadow: 0 0 20px hsl(252 100% 65% / 0.3), 0 0 60px hsl(252 100% 65% / 0.1);
   }
+
   .text-gradient {
     @apply bg-clip-text text-transparent;
     background-image: linear-gradient(135deg, hsl(252, 100%, 65%), hsl(280, 80%, 65%));

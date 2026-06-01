@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, ApiError } from "@/lib/api";
 import { setAuthSession } from "@/lib/auth";
+import { toast } from "@/hooks/use-toast";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -19,12 +20,10 @@ const Login = () => {
   const [firstAccessDoc, setFirstAccessDoc] = useState("");
   const [firstAccess, setFirstAccess] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const resetFormState = () => {
     setPassword("");
     setFirstAccessDoc("");
-    setError(null);
   };
 
   const handleNormalLogin = async (role: "DRIVER" | "MECHANIC") => {
@@ -108,15 +107,18 @@ const Login = () => {
   const handleSubmit = async (role: "DRIVER" | "MECHANIC") => {
     try {
       setLoading(true);
-      setError(null);
-
+  
       if (firstAccess) {
         await handleFirstAccessValidation(role);
       } else {
         await handleNormalLogin(role);
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Falha ao continuar");
+      toast({
+        title: "Erro ao continuar",
+        description: err instanceof ApiError ? err.message : "Não foi possível continuar.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -245,7 +247,6 @@ const Login = () => {
                   </div>
                 )}
 
-                {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
                 <button
                   type="button"
@@ -339,7 +340,6 @@ const Login = () => {
                   </div>
                 )}
 
-                {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
                 <button
                   type="button"

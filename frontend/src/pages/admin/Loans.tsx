@@ -1,25 +1,85 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeftRight, Plus, Search, X } from "lucide-react";
+import { ArrowLeftRight, CalendarIcon, Plus, Search, X } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 
 type LoanForm = {
   vehicle_id: string;
   driver_id: string;
+  company_name: string;
   start_date: string;
   end_date: string;
+  amount: string;
   reason: string;
 };
 
 const initialForm: LoanForm = {
   vehicle_id: "",
   driver_id: "",
+  company_name: "",
   start_date: "",
   end_date: "",
+  amount: "",
   reason: "",
+};
+
+const parseDateValue = (value: string) => {
+  if (!value) return undefined;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+};
+
+const formatDateValue = (date?: Date) => (date ? format(date, "yyyy-MM-dd") : "");
+
+const formatDisplayDate = (value: string) => {
+  const date = parseDateValue(value);
+  return date ? format(date, "dd/MM/yyyy") : "Selecione";
+};
+
+type DatePickerFieldProps = {
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+};
+
+const DatePickerField = ({ value, placeholder, onChange }: DatePickerFieldProps) => {
+  const selected = parseDateValue(value);
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className={cn(
+            "h-12 w-full justify-start rounded-xl border-border bg-secondary px-3 text-left font-normal",
+            !selected && "text-muted-foreground"
+          )}
+        >
+          <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
+          {selected ? formatDisplayDate(value) : placeholder}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto border-border bg-popover p-0 shadow-xl" align="start">
+        <Calendar
+          mode="single"
+          selected={selected}
+          onSelect={(date) => onChange(formatDateValue(date))}
+          initialFocus
+        />
+      </PopoverContent>
+    </Popover>
+  );
 };
 
 const AdminLoans = () => {
@@ -28,7 +88,6 @@ const AdminLoans = () => {
   const [drivers, setDrivers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
@@ -37,8 +96,6 @@ const AdminLoans = () => {
   const loadAll = async () => {
     try {
       setLoading(true);
-      setError(null);
-
       const [loanRes, vehicleRes, driverRes] = await Promise.all([
         api.get<{ data: any[] }>("/loans", { limit: 200 }),
         api.get<{ data: any[] }>("/vehicle", { limit: 200 }),
@@ -49,7 +106,11 @@ const AdminLoans = () => {
       setVehicles(vehicleRes.data || []);
       setDrivers(driverRes.data || []);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Erro ao carregar empréstimos");
+      toast({
+        title: "Erro ao carregar empréstimos",
+        description: err instanceof ApiError ? err.message : "Não foi possível carregar a lista de empréstimos.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -82,6 +143,7 @@ const AdminLoans = () => {
         String(vehicle?.model || "").toLowerCase().includes(term) ||
         String(driver?.name || "").toLowerCase().includes(term) ||
         String(driver?.cpf || "").toLowerCase().includes(term) ||
+        String(loan.company_name || "").toLowerCase().includes(term) ||
         String(loan.reason || "").toLowerCase().includes(term)
       );
     });
@@ -98,8 +160,10 @@ const AdminLoans = () => {
     setForm({
       vehicle_id: loan.vehicle_id || "",
       driver_id: loan.driver_id || "",
+      company_name: loan.company_name || "",
       start_date: loan.start_date || "",
       end_date: loan.end_date || "",
+      amount: loan.amount != null ? String(loan.amount) : "",
       reason: loan.reason || "",
     });
     setModalOpen(true);
@@ -108,10 +172,11 @@ const AdminLoans = () => {
   const submit = async () => {
     try {
       setSaving(true);
-      setError(null);
-
       const payload = {
         ...form,
+        driver_id: form.driver_id || null,
+        company_name: form.company_name.trim() || null,
+        amount: form.amount === "" ? null : Number(form.amount),
         end_date: form.end_date || null,
       };
 
@@ -125,7 +190,11 @@ const AdminLoans = () => {
       setForm(initialForm);
       await loadAll();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Erro ao salvar empréstimo");
+      toast({
+        title: "Erro ao salvar empréstimo",
+        description: err instanceof ApiError ? err.message : "Não foi possível salvar o empréstimo.",
+        variant: "destructive",
+      });
     } finally {
       setSaving(false);
     }
@@ -133,11 +202,14 @@ const AdminLoans = () => {
 
   const removeLoan = async (id: string) => {
     try {
-      setError(null);
       await api.delete(`/loans/${id}`);
       await loadAll();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Erro ao excluir empréstimo");
+      toast({
+        title: "Erro ao excluir empréstimo",
+        description: err instanceof ApiError ? err.message : "Não foi possível excluir o empréstimo.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -161,14 +233,13 @@ const AdminLoans = () => {
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
         <Input
-          placeholder="Buscar por placa, motorista ou motivo..."
+          placeholder="Buscar por placa, empresa, motorista ou motivo..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-10 h-12 text-base bg-secondary border-border"
         />
       </div>
 
-      {error ? <div className="glass-card p-4 text-sm text-destructive">{error}</div> : null}
       {loading ? <div className="glass-card p-4 text-sm text-muted-foreground">Carregando empréstimos...</div> : null}
 
       {!loading && (
@@ -178,9 +249,11 @@ const AdminLoans = () => {
             <thead>
               <tr className="border-b border-border">
                 <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Veículo</th>
+                <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Empresa</th>
                 <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Motorista</th>
                 <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Início</th>
                 <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Fim</th>
+                <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Valor</th>
                 <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Motivo</th>
                 <th className="text-right p-4 text-sm font-semibold text-muted-foreground">Ações</th>
               </tr>
@@ -205,8 +278,9 @@ const AdminLoans = () => {
                         </div>
                       </div>
                     </td>
+                    <td className="p-4 text-foreground">{loan.company_name || "—"}</td>
                     <td className="p-4 text-foreground">
-                      {driver?.name || loan.driver_id}
+                      {driver?.name || (loan.driver_id ? loan.driver_id : "Sem motorista")}
                       <br />
                       <span className="text-sm text-muted-foreground">{driver?.cpf || "—"}</span>
                     </td>
@@ -215,6 +289,11 @@ const AdminLoans = () => {
                     </td>
                     <td className="p-4 text-foreground">
                       {loan.end_date ? new Date(loan.end_date).toLocaleDateString("pt-BR") : "Em aberto"}
+                    </td>
+                    <td className="p-4 text-foreground">
+                      {loan.amount != null
+                        ? `R$ ${Number(loan.amount || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                        : "—"}
                     </td>
                     <td className="p-4 text-foreground">{loan.reason || "—"}</td>
                     <td className="p-4 text-right space-x-2">
@@ -253,53 +332,88 @@ const AdminLoans = () => {
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Veículo</Label>
-                <select
-                  value={form.vehicle_id}
-                  onChange={(e) => setForm((current) => ({ ...current, vehicle_id: e.target.value }))}
-                  className="h-12 w-full rounded-md bg-secondary border border-border px-3 text-sm"
+                <Select
+                  value={form.vehicle_id || "placeholder"}
+                  onValueChange={(value) => setForm((current) => ({ ...current, vehicle_id: value === "placeholder" ? "" : value }))}
                 >
-                  <option value="">Selecione</option>
-                  {vehicles.map((vehicle) => (
-                    <option key={vehicle.id} value={vehicle.id}>
-                      {vehicle.plate} — {[vehicle.make, vehicle.model].filter(Boolean).join(" ")}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="h-12 bg-secondary border-border">
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="placeholder" disabled>
+                      Selecione
+                    </SelectItem>
+                    {vehicles.map((vehicle) => (
+                      <SelectItem key={vehicle.id} value={vehicle.id}>
+                        {vehicle.plate} — {[vehicle.make, vehicle.model].filter(Boolean).join(" ")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
-                <Label>Motorista</Label>
-                <select
-                  value={form.driver_id}
-                  onChange={(e) => setForm((current) => ({ ...current, driver_id: e.target.value }))}
-                  className="h-12 w-full rounded-md bg-secondary border border-border px-3 text-sm"
+                <Label>Motorista opcional</Label>
+                <Select
+                  value={form.driver_id || "none"}
+                  onValueChange={(value) => setForm((current) => ({ ...current, driver_id: value === "none" ? "" : value }))}
                 >
-                  <option value="">Selecione</option>
-                  {drivers.map((driver) => (
-                    <option key={driver.id} value={driver.id}>
-                      {driver.name} — {driver.cpf || driver.email}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="h-12 bg-secondary border-border">
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      Sem motorista
+                    </SelectItem>
+                    {drivers.map((driver) => (
+                      <SelectItem key={driver.id} value={driver.id}>
+                        {driver.name} — {driver.cpf || driver.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+
+
+              <div className="space-y-2 md:col-span-2">
+                <Label>Empresa do empréstimo</Label>
+                <Input
+                  value={form.company_name}
+                  onChange={(e) => setForm((current) => ({ ...current, company_name: e.target.value }))}
+                  className="h-12 bg-secondary border-border"
+                  placeholder="Ex.: Prefeitura Municipal, Secretaria de Saúde, Empresa X"
+                />
               </div>
 
               <div className="space-y-2">
                 <Label>Data inicial</Label>
-                <Input
-                  type="date"
+                <DatePickerField
                   value={form.start_date}
-                  onChange={(e) => setForm((current) => ({ ...current, start_date: e.target.value }))}
-                  className="h-12 bg-secondary border-border"
+                  placeholder="Selecione a data inicial"
+                  onChange={(value) => setForm((current) => ({ ...current, start_date: value }))}
                 />
               </div>
 
               <div className="space-y-2">
                 <Label>Data final</Label>
-                <Input
-                  type="date"
+                <DatePickerField
                   value={form.end_date}
-                  onChange={(e) => setForm((current) => ({ ...current, end_date: e.target.value }))}
+                  placeholder="Selecione a data final"
+                  onChange={(value) => setForm((current) => ({ ...current, end_date: value }))}
+                />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label>Valor do empréstimo</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.amount}
+                  onChange={(e) => setForm((current) => ({ ...current, amount: e.target.value }))}
                   className="h-12 bg-secondary border-border"
+                  placeholder="Ex.: 250,00"
                 />
               </div>
 

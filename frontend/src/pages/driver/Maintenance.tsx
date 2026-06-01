@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNavigate } from "react-router-dom";
 import { translateMaintenancePriority, translateMaintenanceStatus } from "@/lib/formatters";
 
@@ -164,15 +165,19 @@ const DriverMaintenancePage = () => {
 
           <div className="space-y-2">
             <Label>Prioridade</Label>
-            <select
+            <Select
               value={form.priority}
-              onChange={(e) => setForm((current) => ({ ...current, priority: e.target.value }))}
-              className="h-12 w-full rounded-md bg-secondary border border-border px-3 text-sm text-foreground"
+              onValueChange={(value) => setForm((current) => ({ ...current, priority: value }))}
             >
-              <option value="LOW">Baixa</option>
-              <option value="MEDIUM">Média</option>
-              <option value="HIGH">Alta</option>
-            </select>
+              <SelectTrigger className="h-12 bg-secondary border-border text-foreground">
+                <SelectValue placeholder="Selecione a prioridade" />
+              </SelectTrigger>
+              <SelectContent className="border-border bg-popover text-popover-foreground">
+                <SelectItem value="LOW">Baixa</SelectItem>
+                <SelectItem value="MEDIUM">Média</SelectItem>
+                <SelectItem value="HIGH">Alta</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">

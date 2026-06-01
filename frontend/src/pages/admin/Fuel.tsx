@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api, ApiError } from "@/lib/api";
 import { FUEL_TYPE_OPTIONS } from "@/lib/vehicleCatalog";
 
@@ -316,34 +317,40 @@ const AdminFuel = () => {
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{fieldLabels.vehicle_id}</Label>
-                <select
+                <Select
                   value={form.vehicle_id}
-                  onChange={(e) => setForm((current: any) => ({ ...current, vehicle_id: e.target.value }))}
-                  className="h-12 w-full rounded-md bg-secondary border border-border px-3 text-sm text-foreground"
+                  onValueChange={(value) => setForm((current: any) => ({ ...current, vehicle_id: value }))}
                 >
-                  <option value="">Selecione um veículo</option>
-                  {vehicles.map((vehicle) => (
-                    <option key={vehicle.id} value={vehicle.id}>
-                      {vehicle.plate} - {[vehicle.make, vehicle.model].filter(Boolean).join(" ")}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="h-12 bg-secondary border-border text-foreground">
+                    <SelectValue placeholder="Selecione um veículo" />
+                  </SelectTrigger>
+                  <SelectContent className="border-border bg-popover text-popover-foreground">
+                    {vehicles.map((vehicle) => (
+                      <SelectItem key={vehicle.id} value={vehicle.id}>
+                        {vehicle.plate} - {[vehicle.make, vehicle.model].filter(Boolean).join(" ")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
                 <Label>{fieldLabels.fuel_type}</Label>
-                <select
+                <Select
                   value={String(form.fuel_type ?? "")}
-                  onChange={(e) => setForm((current: any) => ({ ...current, fuel_type: e.target.value }))}
-                  className="h-12 w-full rounded-md bg-secondary border border-border px-3 text-sm text-foreground"
+                  onValueChange={(value) => setForm((current: any) => ({ ...current, fuel_type: value }))}
                 >
-                  <option value="">Selecione o combustível</option>
-                  {FUEL_TYPE_OPTIONS.map((fuelType) => (
-                    <option key={fuelType} value={fuelType}>
-                      {fuelType}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="h-12 bg-secondary border-border text-foreground">
+                    <SelectValue placeholder="Selecione o combustível" />
+                  </SelectTrigger>
+                  <SelectContent className="border-border bg-popover text-popover-foreground">
+                    {FUEL_TYPE_OPTIONS.map((fuelType) => (
+                      <SelectItem key={fuelType} value={fuelType}>
+                        {fuelType}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">

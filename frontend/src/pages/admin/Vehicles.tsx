@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Search, Plus, Car, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -13,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { api, ApiError } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 import { getAvailableMakes, getAvailableModels, getAvailableYears, getCatalogFuelType } from "@/lib/vehicleCatalog";
 
 const initialForm = {
@@ -23,7 +23,6 @@ const initialForm = {
   fuel_type: "",
   current_km: "",
   status: "active",
-  driver_id: "none",
 };
 
 const fieldLabels: Record<string, string> = {
@@ -34,7 +33,6 @@ const fieldLabels: Record<string, string> = {
   fuel_type: "Combustível",
   current_km: "Quilometragem atual",
   status: "Status",
-  driver_id: "Motorista",
 };
 
 const vehicleStatusOptions = [
@@ -54,18 +52,16 @@ const AdminVehicles = () => {
   const [loans, setLoans] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
   const [form, setForm] = useState<any>(initialForm);
   const [saving, setSaving] = useState(false);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+  const [updatingDriverId, setUpdatingDriverId] = useState<string | null>(null);
 
   const loadVehicles = async () => {
     try {
       setLoading(true);
-      setError(null);
-
       const [vehicleResponse, driverResponse, loanResponse] = await Promise.all([
         api.get<{ data: any[] }>("/vehicle", { limit: 200 }),
         api.get<{ data: any[] }>("/driver", { limit: 200 }),
@@ -76,7 +72,11 @@ const AdminVehicles = () => {
       setDrivers(driverResponse.data || []);
       setLoans(loanResponse.data || []);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Erro ao carregar veículos");
+      toast({
+        title: "Erro ao carregar veículos",
+        description: err instanceof ApiError ? err.message : "Não foi possível carregar a lista de veículos.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -86,10 +86,11 @@ const AdminVehicles = () => {
     loadVehicles();
   }, []);
 
-  const latestLoanByVehicleId = useMemo(() => {
+  const activeLoanByVehicleId = useMemo(() => {
     const map = new Map<string, any>();
 
-    [...loans]
+    loans
+      .filter((loan) => !loan.end_date)
       .sort(
         (a, b) =>
           new Date(b.start_date || b.created_at || 0).getTime() -
@@ -150,7 +151,7 @@ const AdminVehicles = () => {
     () =>
       vehicles.filter((vehicle) => {
         const term = search.toLowerCase();
-        const currentLoan = latestLoanByVehicleId.get(vehicle.id);
+        const currentLoan = activeLoanByVehicleId.get(vehicle.id);
         const currentDriver = currentLoan?.driver_id
           ? driverById.get(currentLoan.driver_id)
           : null;
@@ -163,7 +164,7 @@ const AdminVehicles = () => {
           String(currentDriver?.name || "").toLowerCase().includes(term)
         );
       }),
-    [vehicles, search, latestLoanByVehicleId, driverById]
+    [vehicles, search, activeLoanByVehicleId, driverById]
   );
 
   const openCreate = () => {
@@ -173,7 +174,6 @@ const AdminVehicles = () => {
   };
 
   const openEdit = (vehicle: any) => {
-    const currentLoan = latestLoanByVehicleId.get(vehicle.id);
     setEditing(vehicle);
     setForm({
       plate: vehicle.plate || "",
@@ -183,46 +183,58 @@ const AdminVehicles = () => {
       fuel_type: vehicle.fuel_type || "",
       current_km: vehicle.current_km || "",
       status: vehicle.status || "active",
-      driver_id: currentLoan?.driver_id || "none",
     });
     setModalOpen(true);
   };
 
-  const syncVehicleDriver = async (vehicleId: string, selectedDriverId: string) => {
-    const currentLoan = latestLoanByVehicleId.get(vehicleId);
+  const updateVehicleDriver = async (vehicleId: string, selectedDriverId: string) => {
+    const currentLoan = activeLoanByVehicleId.get(vehicleId);
     const currentDriverId = currentLoan?.driver_id || "none";
 
     if (selectedDriverId === currentDriverId) {
       return;
     }
 
-    if (currentLoan?.id && selectedDriverId === "none") {
-      await api.put(`/loans/${currentLoan.id}`, {
-        end_date: new Date().toISOString(),
-      });
-      return;
-    }
+    try {
+      setUpdatingDriverId(vehicleId);
+      if (currentLoan?.id) {
+        await api.put(`/loans/${currentLoan.id}`, {
+          end_date: new Date().toISOString(),
+        });
+      }
 
-    if (currentLoan?.id && currentLoan.driver_id && selectedDriverId !== currentLoan.driver_id) {
-      await api.put(`/loans/${currentLoan.id}`, {
-        end_date: new Date().toISOString(),
-      });
-    }
+      if (selectedDriverId !== "none") {
+        await api.post("/loans", {
+          vehicle_id: vehicleId,
+          driver_id: selectedDriverId,
+          start_date: new Date().toISOString(),
+          reason: "Vínculo direto pela listagem de veículos",
+        });
+      }
 
-    if (selectedDriverId !== "none") {
-      await api.post("/loans", {
-        vehicle_id: vehicleId,
-        driver_id: selectedDriverId,
-        start_date: new Date().toISOString(),
+      toast({
+        title: selectedDriverId === "none" ? "Motorista removido" : "Motorista atualizado",
+        description:
+          selectedDriverId === "none"
+            ? "O veículo ficou sem motorista vinculado."
+            : "O motorista do veículo foi atualizado com sucesso.",
       });
+
+      await loadVehicles();
+    } catch (err) {
+      toast({
+        title: "Erro ao atualizar motorista",
+        description: err instanceof ApiError ? err.message : "Não foi possível alterar o motorista do veículo.",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingDriverId(null);
     }
   };
 
   const submit = async () => {
     try {
       setSaving(true);
-      setError(null);
-
       const payload = {
         plate: form.plate,
         make: form.make,
@@ -233,17 +245,10 @@ const AdminVehicles = () => {
         status: form.status,
       };
 
-      let vehicleId = editing?.id;
-
       if (editing) {
         await api.put(`/vehicle/${editing.id}`, payload);
       } else {
-        const created = await api.post<any>("/vehicle", payload);
-        vehicleId = created?.data?.id || created?.id;
-      }
-
-      if (vehicleId) {
-        await syncVehicleDriver(vehicleId, form.driver_id);
+        await api.post<any>("/vehicle", payload);
       }
 
       setModalOpen(false);
@@ -251,7 +256,11 @@ const AdminVehicles = () => {
       setEditing(null);
       await loadVehicles();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Erro ao salvar veículo");
+      toast({
+        title: "Erro ao salvar veículo",
+        description: err instanceof ApiError ? err.message : "Não foi possível salvar o veículo.",
+        variant: "destructive",
+      });
     } finally {
       setSaving(false);
     }
@@ -262,15 +271,17 @@ const AdminVehicles = () => {
       await api.delete(`/vehicle/${id}`);
       await loadVehicles();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Erro ao excluir veículo");
+      toast({
+        title: "Erro ao excluir veículo",
+        description: err instanceof ApiError ? err.message : "Não foi possível excluir o veículo.",
+        variant: "destructive",
+      });
     }
   };
 
   const updateVehicleStatus = async (vehicle: any, status: string) => {
     try {
       setUpdatingStatusId(vehicle.id);
-      setError(null);
-
       await api.put(`/vehicle/${vehicle.id}`, {
         plate: vehicle.plate,
         make: vehicle.make,
@@ -285,7 +296,11 @@ const AdminVehicles = () => {
         current.map((item) => (item.id === vehicle.id ? { ...item, status } : item))
       );
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Erro ao atualizar status");
+      toast({
+        title: "Erro ao atualizar status",
+        description: err instanceof ApiError ? err.message : "Não foi possível atualizar o status do veículo.",
+        variant: "destructive",
+      });
     } finally {
       setUpdatingStatusId(null);
     }
@@ -321,7 +336,6 @@ const AdminVehicles = () => {
         />
       </div>
 
-      {error ? <div className="glass-card p-4 text-sm text-destructive">{error}</div> : null}
       {loading ? (
         <div className="glass-card p-4 text-sm text-muted-foreground">Carregando veículos...</div>
       ) : null}
@@ -343,7 +357,7 @@ const AdminVehicles = () => {
             </thead>
             <tbody>
               {filtered.map((vehicle) => {
-                const currentLoan = latestLoanByVehicleId.get(vehicle.id);
+                const currentLoan = activeLoanByVehicleId.get(vehicle.id);
                 const currentDriver = currentLoan?.driver_id
                   ? driverById.get(currentLoan.driver_id)
                   : null;
@@ -367,15 +381,24 @@ const AdminVehicles = () => {
                       </div>
                     </td>
                     <td className="p-4 font-mono font-semibold text-foreground">{vehicle.plate}</td>
-                    <td className="p-4">
-                      {currentDriver ? (
-                        <div>
-                          <p className="font-medium text-foreground">{currentDriver.name}</p>
-                          <p className="text-sm text-muted-foreground">{currentDriver.phone || "—"}</p>
-                        </div>
-                      ) : (
-                        <Badge variant="secondary">Sem motorista</Badge>
-                      )}
+                    <td className="p-4 min-w-[240px]">
+                      <Select
+                        value={currentDriver?.id || "none"}
+                        onValueChange={(value) => updateVehicleDriver(vehicle.id, value)}
+                        disabled={updatingDriverId === vehicle.id}
+                      >
+                        <SelectTrigger className="h-10 bg-secondary border-border">
+                          <SelectValue placeholder="Selecione um motorista" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sem motorista</SelectItem>
+                          {drivers.map((driver) => (
+                            <SelectItem key={driver.id} value={driver.id}>
+                              {driver.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </td>
                     <td className="p-4 text-foreground">
                       {Number(vehicle.current_km || 0).toLocaleString("pt-BR")} km
@@ -566,28 +589,6 @@ const AdminVehicles = () => {
                     {vehicleStatusOptions.map((status) => (
                       <SelectItem key={status.value} value={status.value}>
                         {status.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>{fieldLabels.driver_id}</Label>
-                <Select
-                  value={form.driver_id}
-                  onValueChange={(value) =>
-                    setForm((current: any) => ({ ...current, driver_id: value }))
-                  }
-                >
-                  <SelectTrigger className="h-12 bg-secondary border-border">
-                    <SelectValue placeholder="Selecione um motorista" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sem motorista</SelectItem>
-                    {drivers.map((driver) => (
-                      <SelectItem key={driver.id} value={driver.id}>
-                        {driver.name}
                       </SelectItem>
                     ))}
                   </SelectContent>

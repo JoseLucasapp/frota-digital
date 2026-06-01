@@ -353,13 +353,9 @@ const AdminDrivers = () => {
               ))}
               <div className="space-y-2">
                 <Label>Validade CNH</Label>
-                <Input
-                  type="date"
+                <DriverDateField
                   value={form.cnh_valid_until}
-                  onChange={(e) =>
-                    setForm((current) => ({ ...current, cnh_valid_until: e.target.value }))
-                  }
-                  className="h-12 bg-secondary border-border"
+                  onChange={(value) => setForm((current) => ({ ...current, cnh_valid_until: value }))}
                 />
               </div>
               <div className="space-y-2">

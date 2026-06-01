@@ -1,251 +1,440 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
-import { Car, Users, Fuel, Wrench, AlertTriangle, MapPin, FileText } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useSearchParams } from "react-router-dom";
+import { Search, Plus, Wrench, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { api, ApiError } from "@/lib/api";
-import { isNotificationRead } from "@/lib/notifications";
-import { translateMaintenanceStatus } from "@/lib/formatters";
+import { MAINTENANCE_PRIORITY_OPTIONS, MAINTENANCE_TYPE_OPTIONS } from "@/lib/vehicleCatalog";
+import { translateMaintenanceStatus, translateMaintenancePriority } from "@/lib/formatters";
 
-const removeRawLinks = (value?: string | null) =>
-  String(value || "")
-    .split(/\n+/)
-    .filter((line) => !/google maps\s*:/i.test(line) && !/https?:\/\//i.test(line))
-    .join(" ")
-    .replace(/https?:\/\/\S+/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-const getNotificationIcon = (notification: any) => {
-  const text = `${notification.type || ""} ${notification.title || ""} ${notification.message || ""}`.toLowerCase();
-
-  if (text.includes("rastream") || text.includes("localiza") || text.includes("parada")) return MapPin;
-  if (text.includes("abastec") || text.includes("combust")) return Fuel;
-  if (text.includes("manuten") || text.includes("mecân") || text.includes("mecan")) return Wrench;
-  if (text.includes("document")) return FileText;
-
-  return AlertTriangle;
+const initialForm = {
+  vehicle_id: "",
+  mechanic_id: "",
+  type: "",
+  description: "",
+  priority: "MEDIUM",
+  estimated_cost: "",
+  current_km: "",
+  status: "PENDING",
 };
 
-const getNotificationRoute = (notification: any) => {
-  const text = `${notification.type || ""} ${notification.title || ""} ${notification.message || ""}`.toLowerCase();
-  const message = String(notification.message || "");
-
-  if (text.includes("rastream") || text.includes("localiza") || text.includes("parada")) {
-    const params = new URLSearchParams();
-    const vehicleId = notification.vehicle_id || notification.vehicleId;
-    const trackingId = notification.tracking_log_id || notification.trackingLogId || notification.entity_id;
-    const plateMatch = message.match(/de\s+([^\n.]+?)(?:\s+-|\.\s+Local:|\s+Local:)/i);
-
-    if (vehicleId) params.set("vehicle_id", String(vehicleId));
-    if (trackingId) params.set("tracking_id", String(trackingId));
-    if (!vehicleId && plateMatch?.[1]) params.set("busca", plateMatch[1].trim());
-
-    const query = params.toString();
-    return `/admin/tracking${query ? `?${query}` : ""}`;
-  }
-
-  if (text.includes("abastec") || text.includes("combust") || notification.type === "fuel") {
-    const id = notification.fueling_id || notification.fuelingId || notification.entity_id;
-    return `/admin/fuel${id ? `?highlight=${encodeURIComponent(String(id))}` : ""}`;
-  }
-
-  if (text.includes("manuten") || notification.type === "maintenance") {
-    const id = notification.maintenance_id || notification.maintenanceId || notification.entity_id;
-    return `/admin/maintenance${id ? `?highlight=${encodeURIComponent(String(id))}` : ""}`;
-  }
-
-  if (text.includes("document")) return "/admin/drivers";
-
-  return "/admin";
+const fieldLabels: Record<string, string> = {
+  vehicle_id: "Veículo",
+  mechanic_id: "Mecânico",
+  type: "Tipo",
+  description: "Descrição",
+  priority: "Prioridade",
+  estimated_cost: "Custo estimado",
+  current_km: "Quilometragem atual",
+  status: "Status",
 };
 
-const getNotificationTitle = (notification: any) => {
-  const title = String(notification.title || "Alerta").trim();
-  const text = `${notification.type || ""} ${title} ${notification.message || ""}`.toLowerCase();
-
-  if (text.includes("rastream") || text.includes("localiza")) return "Rastreamento atualizado";
-  if (text.includes("parada")) return "Parada registrada";
-  if (text.includes("abastec") || text.includes("combust")) return "Abastecimento registrado";
-  if (text.includes("manuten") || text.includes("mecân") || text.includes("mecan")) return title;
-
-  return title;
-};
-
-const getNotificationDescription = (notification: any) => {
-  const cleaned = removeRawLinks(notification.message);
-  if (!cleaned) return "Clique para ver os detalhes.";
-
-  return cleaned
-    .replace(/\.\s*Local:/i, " • Local:")
-    .replace(/Google Maps:.*/i, "")
-    .trim();
-};
-
-const tooltipStyle = {
-  backgroundColor: "hsl(var(--card))",
-  border: "1px solid hsl(var(--border))",
-  borderRadius: "0.75rem",
-  color: "hsl(var(--foreground))",
-  boxShadow: "0 12px 30px hsl(var(--background) / 0.35)",
-};
-
-const tooltipLabelStyle = { color: "hsl(var(--foreground))", fontWeight: 600 };
-const tooltipItemStyle = { color: "hsl(var(--foreground))" };
-
-const AdminDashboard = () => {
-  const navigate = useNavigate();
+const AdminMaintenance = () => {
+  const [items, setItems] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
-  const [drivers, setDrivers] = useState<any[]>([]);
-  const [fuelings, setFuelings] = useState<any[]>([]);
-  const [maintenances, setMaintenances] = useState<any[]>([]);
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [mechanics, setMechanics] = useState<any[]>([]);
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [form, setForm] = useState<any>(initialForm);
+  const [saving, setSaving] = useState(false);
+  const [searchParams] = useSearchParams();
+  const highlightedMaintenanceId = searchParams.get("highlight");
+
+  const translatePriority = (value: string) => {
+    return translateMaintenancePriority(value);
+  }
+
+  const translateStatus = (value: string) => {
+    return translateMaintenanceStatus(value);
+  }
+
+  const load = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const [maintenanceRes, vehicleRes, mechanicRes] = await Promise.all([
+        api.get<{ data: any[] }>("/maintenances", { limit: 200 }),
+        api.get<{ data: any[] }>("/vehicle", { limit: 200 }),
+        api.get<{ data: any[] }>("/mechanic", { limit: 200 }),
+      ]);
+
+      setItems(maintenanceRes.data || []);
+      setVehicles(vehicleRes.data || []);
+      setMechanics(mechanicRes.data || []);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erro ao carregar manutenções");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const [vehicleRes, driverRes, fuelingRes, maintenanceRes, notificationRes] = await Promise.all([
-          api.get<{ data: any[] }>("/vehicle", { limit: 200 }),
-          api.get<{ data: any[] }>("/driver", { limit: 200 }),
-          api.get<{ data: any[] }>("/fueling", { limit: 200 }),
-          api.get<{ data: any[] }>("/maintenances", { limit: 200 }),
-          api.get<{ data: any[] }>("/notifications", { limit: 50 }),
-        ]);
-        setVehicles(vehicleRes.data || []);
-        setDrivers(driverRes.data || []);
-        setFuelings(fuelingRes.data || []);
-        setMaintenances(maintenanceRes.data || []);
-        setNotifications(notificationRes.data || []);
-      } catch (err) {
-        setError(err instanceof ApiError ? err.message : "Erro ao carregar dashboard");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     load();
   }, []);
 
-  const stats = useMemo(() => {
-    const activeVehicles = vehicles.filter((vehicle) => String(vehicle.status).toLowerCase() === "active").length;
-    const activeDrivers = drivers.filter((driver) => String(driver.status).toLowerCase() === "active").length;
-    const totalFuelCost = fuelings.reduce((sum, item) => sum + Number(item.total_price || Number(item.liters || 0) * Number(item.price_per_liter || 0)), 0);
-    const pendingMaintenances = maintenances.filter((item) => String(item.status).toLowerCase().includes("pending")).length;
+  useEffect(() => {
+    const initialSearch = searchParams.get("busca");
+    if (initialSearch) setSearch(initialSearch);
+  }, [searchParams]);
 
-    return { activeVehicles, activeDrivers, totalFuelCost, pendingMaintenances };
-  }, [vehicles, drivers, fuelings, maintenances]);
+  const vehiclesMap = useMemo(
+    () => Object.fromEntries(vehicles.map((item) => [item.id, item])),
+    [vehicles]
+  );
 
-  const fuelByMonth = useMemo(() => {
-    const monthMap = new Map<string, number>();
-    fuelings.forEach((item) => {
-      const sourceDate = item.created_at || item.date || new Date().toISOString();
-      const month = new Date(sourceDate).toLocaleDateString("pt-BR", { month: "short" });
-      const total = Number(item.total_price || Number(item.liters || 0) * Number(item.price_per_liter || 0));
-      monthMap.set(month, (monthMap.get(month) || 0) + total);
+  const mechanicsMap = useMemo(
+    () => Object.fromEntries(mechanics.map((item) => [item.id, item])),
+    [mechanics]
+  );
+
+  useEffect(() => {
+    if (!form.vehicle_id) return;
+    const selectedVehicle = vehiclesMap[form.vehicle_id];
+    if (!selectedVehicle) return;
+
+    setForm((current: any) => ({
+      ...current,
+      current_km:
+        selectedVehicle.current_km != null && selectedVehicle.current_km !== ""
+          ? current.current_km || String(selectedVehicle.current_km)
+          : current.current_km,
+    }));
+  }, [form.vehicle_id, vehiclesMap]);
+
+  const filtered = useMemo(
+    () =>
+      items.filter((item) => {
+        const term = search.toLowerCase();
+        const vehicle = vehiclesMap[item.vehicle_id];
+        const mechanic = mechanicsMap[item.mechanic_id];
+
+        return (
+          !term ||
+          String(item.description || "").toLowerCase().includes(term) ||
+          String(item.type || "").toLowerCase().includes(term) ||
+          String(item.status || "").toLowerCase().includes(term) ||
+          String(vehicle?.plate || "").toLowerCase().includes(term) ||
+          String(vehicle?.model || "").toLowerCase().includes(term) ||
+          String(mechanic?.name || "").toLowerCase().includes(term)
+        );
+      }),
+    [items, search, vehiclesMap, mechanicsMap]
+  );
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm(initialForm);
+    setModalOpen(true);
+  };
+
+  const openEdit = (item: any) => {
+    setEditing(item);
+    setForm({
+      vehicle_id: item.vehicle_id || "",
+      mechanic_id: item.mechanic_id || "",
+      type: item.type || "",
+      description: item.description || "",
+      priority: item.priority || "",
+      estimated_cost: item.estimated_cost || "",
+      current_km: item.current_km || vehiclesMap[item.vehicle_id]?.current_km || "",
+      status: item.status || "PENDING",
     });
-    return Array.from(monthMap.entries()).map(([month, cost]) => ({ month, cost }));
-  }, [fuelings]);
+    setModalOpen(true);
+  };
+
+  const submit = async () => {
+    try {
+      setSaving(true);
+      setError(null);
+
+      if (!form.vehicle_id) {
+        setError("Selecione um veículo.");
+        return;
+      }
+
+      const vehicleKm = Number(vehiclesMap[form.vehicle_id]?.current_km || 0);
+      const nextKm = Number(form.current_km);
+      if (form.current_km && (!Number.isFinite(nextKm) || nextKm < vehicleKm)) {
+        setError(`A quilometragem atual deve ser maior ou igual a ${vehicleKm}.`);
+        return;
+      }
+
+      const payload = {
+        ...form,
+        mechanic_id: form.mechanic_id || null,
+        estimated_cost: form.estimated_cost ? Number(form.estimated_cost) : null,
+        current_km: form.current_km ? Number(form.current_km) : null,
+      };
+
+      if (editing) {
+        await api.put(`/maintenances/${editing.id}`, payload);
+      } else {
+        await api.post("/maintenances", payload);
+      }
+
+      setForm(initialForm);
+      setModalOpen(false);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erro ao salvar manutenção");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (id: string) => {
+    try {
+      await api.delete(`/maintenances/${id}`);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Erro ao excluir manutenção");
+    }
+  };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <div>
-        <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground text-lg mt-1">Visão geral da frota</p>
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="min-w-0 max-w-full space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl lg:text-3xl font-bold text-foreground">Manutenções</h1>
+          <p className="text-muted-foreground text-lg">{items.length} registros</p>
+        </div>
+
+        <Button onClick={openCreate} className="h-12 w-full justify-center gap-2 px-4 text-base sm:w-auto sm:px-6 gradient-primary text-primary-foreground">
+          <Plus className="h-5 w-5 shrink-0" />
+          Nova manutenção
+        </Button>
       </div>
 
-      {error ? <div className="glass-card p-4 text-destructive text-sm">{error}</div> : null}
-      {loading ? <div className="glass-card p-6 text-muted-foreground">Carregando dashboard...</div> : null}
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+        <Input
+          placeholder="Buscar por descrição, tipo, veículo ou mecânico..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-10 h-12 text-base bg-secondary border-border"
+        />
+      </div>
+
+      {error ? <div className="glass-card p-4 text-sm text-destructive">{error}</div> : null}
+      {loading ? <div className="glass-card p-4 text-sm text-muted-foreground">Carregando manutenções...</div> : null}
 
       {!loading && (
-        <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { icon: Car, label: "Veículos ativos", value: `${stats.activeVehicles}/${vehicles.length}` },
-              { icon: Users, label: "Motoristas ativos", value: `${stats.activeDrivers}/${drivers.length}` },
-              { icon: Fuel, label: "Gasto combustível", value: `R$ ${stats.totalFuelCost.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` },
-              { icon: Wrench, label: "Manutenções pendentes", value: String(stats.pendingMaintenances) },
-            ].map((stat) => (
-              <div key={stat.label} className="glass-card p-5">
-                <div className="flex items-center gap-3 mb-3"><stat.icon className="w-5 h-5 text-primary" /></div>
-                <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-                <p className="text-sm text-muted-foreground mt-1">{stat.label}</p>
-              </div>
-            ))}
-          </div>
+        <div className="glass-card max-w-full overflow-hidden p-4 space-y-3">
+          {filtered.map((item) => {
+            const vehicle = vehiclesMap[item.vehicle_id];
+            const mechanic = mechanicsMap[item.mechanic_id];
 
-          <div className="grid lg:grid-cols-2 gap-6">
-            <div className="glass-card p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4">Gastos com combustível</h3>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={fuelByMonth}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={14} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={14} />
-                  <Tooltip
-                    contentStyle={tooltipStyle}
-                    labelStyle={tooltipLabelStyle}
-                    itemStyle={tooltipItemStyle}
-                    cursor={{ fill: "hsl(var(--primary) / 0.08)" }}
-                    formatter={(value: number) => [`R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, "Custo"]}
-                  />
-                  <Bar dataKey="cost" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="glass-card p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-warning" /> Alertas recentes</h3>
-              <div className="space-y-3">
-                {notifications.slice(0, 6).map((item) => {
-                  const Icon = getNotificationIcon(item);
-                  const route = getNotificationRoute(item);
-
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => navigate(route)}
-                      className="flex w-full items-start gap-3 rounded-xl bg-secondary/50 p-3 text-left transition-colors hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    >
-                      <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${isNotificationRead(item) ? "bg-muted" : "bg-primary"}`} />
-                      <Icon className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-                      <div className="min-w-0">
-                        <p className="font-medium text-foreground text-sm">{getNotificationTitle(item)}</p>
-                        <p className="text-muted-foreground text-sm line-clamp-2">{getNotificationDescription(item)}</p>
-                        <p className="mt-1 text-xs font-medium text-primary">Clique para abrir</p>
-                      </div>
-                    </button>
-                  );
-                })}
-                {notifications.length === 0 ? <p className="text-sm text-muted-foreground">Nenhuma notificação encontrada.</p> : null}
-              </div>
-            </div>
-          </div>
-
-          <div className="glass-card p-6">
-            <h3 className="text-lg font-semibold text-foreground mb-4">Ordens de serviço</h3>
-            <div className="space-y-3">
-              {maintenances.slice(0, 5).map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-3 rounded-xl bg-secondary/50">
+            return (
+              <div key={item.id} className={`flex flex-col gap-3 rounded-xl p-3 sm:flex-row sm:items-center sm:justify-between ${highlightedMaintenanceId === item.id ? "bg-primary/10 ring-1 ring-primary" : "bg-secondary/40"}`}>
+                <div className="flex min-w-0 items-center gap-3">
+                  <Wrench className="w-5 h-5 text-primary" />
                   <div>
-                    <p className="font-medium text-foreground text-sm">{item.type || "Manutenção"} — {item.description}</p>
-                    <p className="text-muted-foreground text-sm">Veículo: {item.vehicle_id}</p>
+                    <p className="font-medium text-foreground">
+                      {item.type || "Manutenção"}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Veículo: {vehicle ? `${vehicle.plate} - ${vehicle.make || ""} ${vehicle.model || ""}` : item.vehicle_id}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Mecânico: {mechanic ? mechanic.name : item.mechanic_id || "—"}
+                    </p>
+                    <p className="mt-2 max-w-2xl text-sm text-muted-foreground whitespace-pre-wrap">
+                      Notas: {item.description || "Sem notas"}
+                    </p>
+                    {item.receipt_url ? (
+                      <a href={item.receipt_url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-primary hover:underline">
+                        Ver comprovante
+                      </a>
+                    ) : null}
                   </div>
-                  <Badge>{translateMaintenanceStatus(item.status)}</Badge>
                 </div>
-              ))}
-              {maintenances.length === 0 ? <p className="text-sm text-muted-foreground">Nenhuma manutenção encontrada.</p> : null}
+
+                <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+                  <Badge>{translateStatus(item.status)}</Badge>
+                  <Badge>{translatePriority(item.priority)}</Badge>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+                  <Button variant="outline" onClick={() => openEdit(item)}>
+                    Editar
+                  </Button>
+                  <Button variant="destructive" onClick={() => remove(item.id)}>
+                    Excluir
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+
+          {!filtered.length ? <p className="text-sm text-muted-foreground">Nenhuma manutenção encontrada.</p> : null}
+        </div>
+      )}
+
+      {modalOpen && (
+        <div
+          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setModalOpen(false)}
+        >
+          <div
+            className="glass-card w-full max-w-2xl p-6 space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-foreground">
+                {editing ? "Editar manutenção" : "Nova manutenção"}
+              </h2>
+              <button onClick={() => setModalOpen(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-5 h-5" />
+              </button>
             </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{fieldLabels.vehicle_id}</Label>
+                <Select
+                  value={form.vehicle_id}
+                  onValueChange={(value) => setForm((current: any) => ({ ...current, vehicle_id: value }))}
+                >
+                  <SelectTrigger className="h-12 bg-secondary border-border text-foreground">
+                    <SelectValue placeholder="Selecione um veículo" />
+                  </SelectTrigger>
+                  <SelectContent className="border-border bg-popover text-popover-foreground">
+                    {vehicles.map((vehicle) => (
+                      <SelectItem key={vehicle.id} value={vehicle.id}>
+                        {vehicle.plate} - {[vehicle.make, vehicle.model].filter(Boolean).join(" ")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{fieldLabels.mechanic_id}</Label>
+                <Select
+                  value={form.mechanic_id}
+                  onValueChange={(value) => setForm((current: any) => ({ ...current, mechanic_id: value }))}
+                >
+                  <SelectTrigger className="h-12 bg-secondary border-border text-foreground">
+                    <SelectValue placeholder="Selecione um mecânico" />
+                  </SelectTrigger>
+                  <SelectContent className="border-border bg-popover text-popover-foreground">
+                    {mechanics.map((mechanic) => (
+                      <SelectItem key={mechanic.id} value={mechanic.id}>
+                        {mechanic.name} {mechanic.cnpj ? `- ${mechanic.cnpj}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{fieldLabels.type}</Label>
+                <Select
+                  value={String(form.type ?? "")}
+                  onValueChange={(value) => setForm((current: any) => ({ ...current, type: value }))}
+                >
+                  <SelectTrigger className="h-12 bg-secondary border-border text-foreground">
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                  <SelectContent className="border-border bg-popover text-popover-foreground">
+                    {MAINTENANCE_TYPE_OPTIONS.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{fieldLabels.priority}</Label>
+                <Select
+                  value={String(form.priority ?? "MEDIUM")}
+                  onValueChange={(value) => setForm((current: any) => ({ ...current, priority: value }))}
+                >
+                  <SelectTrigger className="h-12 bg-secondary border-border text-foreground">
+                    <SelectValue placeholder="Selecione a prioridade" />
+                  </SelectTrigger>
+                  <SelectContent className="border-border bg-popover text-popover-foreground">
+                    {MAINTENANCE_PRIORITY_OPTIONS.map((priority) => (
+                      <SelectItem key={priority.value} value={priority.value}>
+                        {priority.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label>{fieldLabels.description}</Label>
+                <Textarea
+                  value={String(form.description ?? "")}
+                  onChange={(e) => setForm((current: any) => ({ ...current, description: e.target.value }))}
+                  className="min-h-24 bg-secondary border-border"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>{fieldLabels.estimated_cost}</Label>
+                <Input
+                  type="number"
+                  value={String(form.estimated_cost ?? "")}
+                  onChange={(e) => setForm((current: any) => ({ ...current, estimated_cost: e.target.value }))}
+                  className="h-12 bg-secondary border-border"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>{fieldLabels.current_km}</Label>
+                <Input
+                  type="number"
+                  value={String(form.current_km ?? "")}
+                  onChange={(e) => setForm((current: any) => ({ ...current, current_km: e.target.value }))}
+                  placeholder="Preenchido pelo veículo"
+                  className="h-12 bg-secondary border-border"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>{fieldLabels.status}</Label>
+                <Select
+                  value={form.status}
+                  onValueChange={(value) => setForm((current: any) => ({ ...current, status: value }))}
+                >
+                  <SelectTrigger className="h-12 bg-secondary border-border text-foreground">
+                    <SelectValue placeholder="Selecione o status" />
+                  </SelectTrigger>
+                  <SelectContent className="border-border bg-popover text-popover-foreground">
+                    <SelectItem value="PENDING">Pendente</SelectItem>
+                    <SelectItem value="IN_PROGRESS">Em andamento</SelectItem>
+                    <SelectItem value="COMPLETED">Concluída</SelectItem>
+                    <SelectItem value="CANCELLED">Cancelada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <Button
+              disabled={saving}
+              onClick={submit}
+              className="w-full h-12 text-base gradient-primary text-primary-foreground"
+            >
+              {saving ? "Salvando..." : "Salvar"}
+            </Button>
           </div>
-        </>
+        </div>
       )}
     </motion.div>
   );
 };
 
-export default AdminDashboard;
+export default AdminMaintenance;

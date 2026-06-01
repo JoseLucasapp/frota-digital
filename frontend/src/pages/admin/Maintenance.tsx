@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { api, ApiError } from "@/lib/api";
 import { MAINTENANCE_PRIORITY_OPTIONS, MAINTENANCE_TYPE_OPTIONS } from "@/lib/vehicleCatalog";
@@ -299,65 +300,78 @@ const AdminMaintenance = () => {
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{fieldLabels.vehicle_id}</Label>
-                <select
+                <Select
                   value={form.vehicle_id}
-                  onChange={(e) => setForm((current: any) => ({ ...current, vehicle_id: e.target.value }))}
-                  className="h-12 w-full rounded-md bg-secondary border border-border px-3 text-sm text-foreground"
+                  onValueChange={(value) => setForm((current: any) => ({ ...current, vehicle_id: value }))}
                 >
-                  <option value="">Selecione um veículo</option>
-                  {vehicles.map((vehicle) => (
-                    <option key={vehicle.id} value={vehicle.id}>
-                      {vehicle.plate} - {[vehicle.make, vehicle.model].filter(Boolean).join(" ")}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="h-12 bg-secondary border-border text-foreground">
+                    <SelectValue placeholder="Selecione um veículo" />
+                  </SelectTrigger>
+                  <SelectContent className="border-border bg-popover text-popover-foreground">
+                    {vehicles.map((vehicle) => (
+                      <SelectItem key={vehicle.id} value={vehicle.id}>
+                        {vehicle.plate} - {[vehicle.make, vehicle.model].filter(Boolean).join(" ")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
                 <Label>{fieldLabels.mechanic_id}</Label>
-                <select
+                <Select
                   value={form.mechanic_id}
-                  onChange={(e) => setForm((current: any) => ({ ...current, mechanic_id: e.target.value }))}
-                  className="h-12 w-full rounded-md bg-secondary border border-border px-3 text-sm text-foreground"
+                  onValueChange={(value) => setForm((current: any) => ({ ...current, mechanic_id: value }))}
                 >
-                  <option value="">Selecione um mecânico</option>
-                  {mechanics.map((mechanic) => (
-                    <option key={mechanic.id} value={mechanic.id}>
-                      {mechanic.name} {mechanic.cnpj ? `- ${mechanic.cnpj}` : ""}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="h-12 bg-secondary border-border text-foreground">
+                    <SelectValue placeholder="Selecione um mecânico" />
+                  </SelectTrigger>
+                  <SelectContent className="border-border bg-popover text-popover-foreground">
+                    {mechanics.map((mechanic) => (
+                      <SelectItem key={mechanic.id} value={mechanic.id}>
+                        {mechanic.name} {mechanic.cnpj ? `- ${mechanic.cnpj}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
                 <Label>{fieldLabels.type}</Label>
-                <select
+                <Select
                   value={String(form.type ?? "")}
-                  onChange={(e) => setForm((current: any) => ({ ...current, type: e.target.value }))}
-                  className="h-12 w-full rounded-md bg-secondary border border-border px-3 text-sm text-foreground"
+                  onValueChange={(value) => setForm((current: any) => ({ ...current, type: value }))}
                 >
-                  <option value="">Selecione o tipo</option>
-                  {MAINTENANCE_TYPE_OPTIONS.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="h-12 bg-secondary border-border text-foreground">
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                  <SelectContent className="border-border bg-popover text-popover-foreground">
+                    {MAINTENANCE_TYPE_OPTIONS.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
                 <Label>{fieldLabels.priority}</Label>
-                <select
+                <Select
                   value={String(form.priority ?? "MEDIUM")}
-                  onChange={(e) => setForm((current: any) => ({ ...current, priority: e.target.value }))}
-                  className="h-12 w-full rounded-md bg-secondary border border-border px-3 text-sm text-foreground"
+                  onValueChange={(value) => setForm((current: any) => ({ ...current, priority: value }))}
                 >
-                  {MAINTENANCE_PRIORITY_OPTIONS.map((priority) => (
-                    <option key={priority.value} value={priority.value}>
-                      {priority.label}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="h-12 bg-secondary border-border text-foreground">
+                    <SelectValue placeholder="Selecione a prioridade" />
+                  </SelectTrigger>
+                  <SelectContent className="border-border bg-popover text-popover-foreground">
+                    {MAINTENANCE_PRIORITY_OPTIONS.map((priority) => (
+                      <SelectItem key={priority.value} value={priority.value}>
+                        {priority.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2 md:col-span-2">
@@ -392,16 +406,20 @@ const AdminMaintenance = () => {
 
               <div className="space-y-2">
                 <Label>{fieldLabels.status}</Label>
-                <select
+                <Select
                   value={form.status}
-                  onChange={(e) => setForm((current: any) => ({ ...current, status: e.target.value }))}
-                  className="h-12 w-full rounded-md bg-secondary border border-border px-3 text-sm text-foreground"
+                  onValueChange={(value) => setForm((current: any) => ({ ...current, status: value }))}
                 >
-                  <option value="PENDING">Pendente</option>
-                  <option value="IN_PROGRESS">Em andamento</option>
-                  <option value="COMPLETED">Concluída</option>
-                  <option value="CANCELLED">Cancelada</option>
-                </select>
+                  <SelectTrigger className="h-12 bg-secondary border-border text-foreground">
+                    <SelectValue placeholder="Selecione o status" />
+                  </SelectTrigger>
+                  <SelectContent className="border-border bg-popover text-popover-foreground">
+                    <SelectItem value="PENDING">Pendente</SelectItem>
+                    <SelectItem value="IN_PROGRESS">Em andamento</SelectItem>
+                    <SelectItem value="COMPLETED">Concluída</SelectItem>
+                    <SelectItem value="CANCELLED">Cancelada</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

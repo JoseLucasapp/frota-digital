@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, ApiError } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 const FirstLogin = () => {
   const navigate = useNavigate();
@@ -27,13 +28,10 @@ const FirstLogin = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
     try {
       setLoading(true);
-      setError(null);
-
       if (!state.userId) {
         throw new Error("Usuário não identificado para o primeiro acesso.");
       }
@@ -68,7 +66,11 @@ const FirstLogin = () => {
 
       navigate("/login", { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Falha ao definir senha");
+      toast({
+        title: "Erro ao definir senha",
+        description: err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Falha ao definir senha.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -159,7 +161,6 @@ const FirstLogin = () => {
             </div>
           </div>
 
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
           <Button
             type="button"

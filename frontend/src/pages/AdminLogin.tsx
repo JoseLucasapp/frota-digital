@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, ApiError } from "@/lib/api";
 import { setAuthSession } from "@/lib/auth";
+import { toast } from "@/hooks/use-toast";
 
 const emptyRegister = {
   institution: "",
@@ -27,8 +28,6 @@ const AdminLogin = () => {
   const [registerForm, setRegisterForm] = useState(emptyRegister);
   const [loginLoading, setLoginLoading] = useState(false);
   const [registerLoading, setRegisterLoading] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
-  const [registerError, setRegisterError] = useState<string | null>(null);
   const [registerSuccess, setRegisterSuccess] = useState<string | null>(null);
 
   const loginIdentifier = useMemo(() => loginForm.email.trim() || loginForm.institution.trim(), [loginForm]);
@@ -37,7 +36,6 @@ const AdminLogin = () => {
     e.preventDefault();
     try {
       setLoginLoading(true);
-      setLoginError(null);
       const response = await api.post<{ token: string; user: any }>("/login", {
         email: loginIdentifier,
         institution: loginForm.institution.trim(),
@@ -45,7 +43,11 @@ const AdminLogin = () => {
       }, { skipAuth: true });
 
       if (response.user.role !== 'ADMIN') {
-        setLoginError('Esse acesso é apenas para administradores.');
+        toast({
+          title: "Acesso não permitido",
+          description: "Esse acesso é apenas para administradores.",
+          variant: "destructive",
+        });
         return;
       }
 
@@ -55,7 +57,11 @@ const AdminLogin = () => {
           .some((value) => String(value).toLowerCase() === loginForm.institution.trim().toLowerCase());
 
         if (!institutionMatch) {
-          setLoginError('Instituição/CNPJ não confere com o administrador informado.');
+          toast({
+            title: "Dados não conferem",
+            description: "Instituição/CNPJ não confere com o administrador informado.",
+            variant: "destructive",
+          });
           return;
         }
       }
@@ -63,7 +69,11 @@ const AdminLogin = () => {
       setAuthSession(response.token, response.user);
       navigate('/admin', { replace: true });
     } catch (err) {
-      setLoginError(err instanceof ApiError ? err.message : 'Falha ao entrar no painel admin');
+      toast({
+        title: "Erro ao entrar no painel",
+        description: err instanceof ApiError ? err.message : "Falha ao entrar no painel admin.",
+        variant: "destructive",
+      });
     } finally {
       setLoginLoading(false);
     }
@@ -73,7 +83,6 @@ const AdminLogin = () => {
     e.preventDefault();
     try {
       setRegisterLoading(true);
-      setRegisterError(null);
       setRegisterSuccess(null);
       await api.post('/admin', registerForm, { skipAuth: true });
       setRegisterSuccess('Instituição cadastrada com sucesso. Agora você já pode entrar no painel.');
@@ -81,7 +90,11 @@ const AdminLogin = () => {
       setRegisterForm(emptyRegister);
       setTab('login');
     } catch (err) {
-      setRegisterError(err instanceof ApiError ? err.message : 'Falha ao cadastrar instituição');
+      toast({
+        title: "Erro ao cadastrar instituição",
+        description: err instanceof ApiError ? err.message : "Falha ao cadastrar instituição.",
+        variant: "destructive",
+      });
     } finally {
       setRegisterLoading(false);
     }
@@ -100,7 +113,7 @@ const AdminLogin = () => {
         </div>
 
         <div className="glass-card p-8">
-          <Tabs value={tab} onValueChange={(value) => { setTab(value as 'login' | 'register'); setLoginError(null); setRegisterError(null); }}>
+          <Tabs value={tab} onValueChange={(value) => setTab(value as 'login' | 'register')}>
             <TabsList className="grid w-full grid-cols-2 h-12 bg-secondary mb-6">
               <TabsTrigger value="login" className="data-[state=active]:gradient-primary data-[state=active]:text-primary-foreground">Entrar</TabsTrigger>
               <TabsTrigger value="register" className="data-[state=active]:gradient-primary data-[state=active]:text-primary-foreground">Cadastrar instituição</TabsTrigger>
@@ -127,7 +140,6 @@ const AdminLogin = () => {
                     </button>
                   </div>
                 </div>
-                {loginError ? <p className="text-sm text-destructive">{loginError}</p> : null}
                 {registerSuccess && tab === 'login' ? <p className="text-sm text-green-600">{registerSuccess}</p> : null}
                 <Button type="submit" disabled={loginLoading} className="w-full h-12 text-lg font-semibold gradient-primary hover:opacity-90 transition-opacity">
                   {loginLoading ? 'Entrando...' : 'Acessar Painel'}
@@ -168,7 +180,6 @@ const AdminLogin = () => {
                     </button>
                   </div>
                 </div>
-                {registerError ? <p className="text-sm text-destructive">{registerError}</p> : null}
                 <Button type="submit" disabled={registerLoading} className="w-full h-12 text-lg font-semibold gradient-primary hover:opacity-90 transition-opacity">
                   {registerLoading ? 'Cadastrando...' : 'Cadastrar instituição'}
                 </Button>

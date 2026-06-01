@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Download, FileText, Fuel, Wrench, Car, Users, Printer } from "lucide-react";
+import { CalendarIcon, Download, FileText, Fuel, Wrench, Car, Users, Printer } from "lucide-react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -13,7 +13,10 @@ import {
 import { api, ApiError } from "@/lib/api";
 import { translateMaintenanceStatus } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 
 const chartTooltipStyle = {
   backgroundColor: "hsl(var(--card))",
@@ -26,9 +29,55 @@ const chartTooltipStyle = {
 const chartTooltipLabelStyle = { color: "hsl(var(--foreground))", fontWeight: 600 };
 const chartTooltipItemStyle = { color: "hsl(var(--foreground))" };
 
+const parseDateValue = (value: string) => {
+  if (!value) return undefined;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+};
+
+const formatDateValue = (date?: Date) => (date ? format(date, "yyyy-MM-dd") : "");
+
+type DatePickerFieldProps = {
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+};
+
+const DatePickerField = ({ value, placeholder, onChange }: DatePickerFieldProps) => {
+  const selected = parseDateValue(value);
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className={cn(
+            "h-10 w-full justify-start rounded-md border-border bg-secondary px-3 text-left font-normal",
+            !selected && "text-muted-foreground"
+          )}
+        >
+          <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
+          {selected ? format(selected, "dd/MM/yyyy") : placeholder}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto border-border bg-popover p-0 shadow-xl" align="start">
+        <Calendar
+          mode="single"
+          selected={selected}
+          onSelect={(date) => onChange(formatDateValue(date))}
+          initialFocus
+        />
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 const AdminReports = () => {
   const [fuelings, setFuelings] = useState<any[]>([]);
   const [maintenances, setMaintenances] = useState<any[]>([]);
+  const [loans, setLoans] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -43,15 +92,17 @@ const AdminReports = () => {
         setLoading(true);
         setError(null);
 
-        const [fuelingRes, maintenanceRes, vehicleRes, driverRes] = await Promise.all([
+        const [fuelingRes, maintenanceRes, loanRes, vehicleRes, driverRes] = await Promise.all([
           api.get<{ data: any[] }>("/fueling", { limit: 500 }),
           api.get<{ data: any[] }>("/maintenances", { limit: 500 }),
+          api.get<{ data: any[] }>("/loans", { limit: 500 }),
           api.get<{ data: any[] }>("/vehicle", { limit: 500 }),
           api.get<{ data: any[] }>("/driver", { limit: 500 }),
         ]);
 
         setFuelings(fuelingRes.data || []);
         setMaintenances(maintenanceRes.data || []);
+        setLoans(loanRes.data || []);
         setVehicles(vehicleRes.data || []);
         setDrivers(driverRes.data || []);
       } catch (err) {
@@ -69,7 +120,7 @@ const AdminReports = () => {
     [vehicles]
   );
 
-  const isWithinDateRange = (value: string | null | undefined) => {
+  const isWithinDateRange = useCallback((value: string | null | undefined) => {
     if (!value) return true;
 
     const current = new Date(value);
@@ -86,19 +137,25 @@ const AdminReports = () => {
     }
 
     return true;
-  };
+  }, [startDate, endDate]);
 
   const filteredFuelings = useMemo(() => {
     return fuelings.filter((item) =>
       isWithinDateRange(item.created_at || item.date)
     );
-  }, [fuelings, startDate, endDate]);
+  }, [fuelings, isWithinDateRange]);
 
   const filteredMaintenances = useMemo(() => {
     return maintenances.filter((item) =>
       isWithinDateRange(item.created_at || item.updated_at)
     );
-  }, [maintenances, startDate, endDate]);
+  }, [maintenances, isWithinDateRange]);
+
+  const filteredLoans = useMemo(() => {
+    return loans.filter((item) =>
+      isWithinDateRange(item.start_date || item.created_at)
+    );
+  }, [loans, isWithinDateRange]);
 
   const totalFuelCost = useMemo(() => {
     return filteredFuelings.reduce((sum, item) => {
@@ -116,6 +173,10 @@ const AdminReports = () => {
     }, 0);
   }, [filteredMaintenances]);
 
+  const totalLoanAmount = useMemo(() => {
+    return filteredLoans.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  }, [filteredLoans]);
+
   const pendingMaintenances = useMemo(() => {
     return filteredMaintenances.filter((item) =>
       String(item.status || "").toLowerCase().includes("pending")
@@ -123,7 +184,7 @@ const AdminReports = () => {
   }, [filteredMaintenances]);
 
   const reportData = useMemo(() => {
-    const map = new Map<string, { fuel: number; maintenance: number }>();
+    const map = new Map<string, { fuel: number; maintenance: number; loans: number }>();
 
     filteredFuelings.forEach((item) => {
       const month = new Date(
@@ -135,7 +196,7 @@ const AdminReports = () => {
         Number(item.liters || 0) * Number(item.price_per_liter || 0)
       );
 
-      const current = map.get(month) || { fuel: 0, maintenance: 0 };
+      const current = map.get(month) || { fuel: 0, maintenance: 0, loans: 0 };
       current.fuel += total;
       map.set(month, current);
     });
@@ -147,8 +208,20 @@ const AdminReports = () => {
 
       const total = Number(item.estimated_cost || 0);
 
-      const current = map.get(month) || { fuel: 0, maintenance: 0 };
+      const current = map.get(month) || { fuel: 0, maintenance: 0, loans: 0 };
       current.maintenance += total;
+      map.set(month, current);
+    });
+
+    filteredLoans.forEach((item) => {
+      const month = new Date(
+        item.start_date || item.created_at || new Date().toISOString()
+      ).toLocaleDateString("pt-BR", { month: "short" });
+
+      const total = Number(item.amount || 0);
+
+      const current = map.get(month) || { fuel: 0, maintenance: 0, loans: 0 };
+      current.loans += total;
       map.set(month, current);
     });
 
@@ -156,12 +229,13 @@ const AdminReports = () => {
       month,
       fuel: values.fuel,
       maintenance: values.maintenance,
+      loans: values.loans,
     }));
-  }, [filteredFuelings, filteredMaintenances]);
+  }, [filteredFuelings, filteredMaintenances, filteredLoans]);
 
   const exportCSV = () => {
     const rows = [
-      ["Tipo", "Data", "Veículo", "Detalhe", "Valor"],
+      ["Tipo", "Data", "Veículo", "Empresa", "Detalhe", "Valor"],
       ...filteredFuelings.map((item) => {
         const vehicle = vehicleMap[item.vehicle_id];
         const total = Number(
@@ -173,6 +247,7 @@ const AdminReports = () => {
           "Abastecimento",
           item.created_at || item.date || "",
           vehicle?.plate || item.vehicle_id || "",
+          "",
           `${item.fuel_type || ""} - ${item.station || ""}`,
           total.toFixed(2),
         ];
@@ -184,8 +259,21 @@ const AdminReports = () => {
           "Manutenção",
           item.created_at || item.updated_at || "",
           vehicle?.plate || item.vehicle_id || "",
+          "",
           `${item.type || ""} - ${item.description || ""}`,
           Number(item.estimated_cost || 0).toFixed(2),
+        ];
+      }),
+      ...filteredLoans.map((item) => {
+        const vehicle = vehicleMap[item.vehicle_id];
+
+        return [
+          "Empréstimo",
+          item.start_date || item.created_at || "",
+          vehicle?.plate || item.vehicle_id || "",
+          item.company_name || "",
+          item.reason || "Sem motivo informado",
+          Number(item.amount || 0).toFixed(2),
         ];
       }),
     ];
@@ -251,21 +339,19 @@ const AdminReports = () => {
         <div className="grid md:grid-cols-3 gap-4">
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Data inicial</label>
-            <Input
-              type="date"
+            <DatePickerField
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="bg-secondary border-border"
+              placeholder="Selecione a data inicial"
+              onChange={setStartDate}
             />
           </div>
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Data final</label>
-            <Input
-              type="date"
+            <DatePickerField
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="bg-secondary border-border"
+              placeholder="Selecione a data final"
+              onChange={setEndDate}
             />
           </div>
 
@@ -289,7 +375,7 @@ const AdminReports = () => {
 
       {!loading && (
         <>
-          <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-4">
             <div className="glass-card p-5">
               <Fuel className="w-5 h-5 text-primary mb-3" />
               <p className="text-2xl font-bold text-foreground">
@@ -304,6 +390,14 @@ const AdminReports = () => {
                 R$ {totalMaintenanceCost.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </p>
               <p className="text-sm text-muted-foreground">Custo estimado de manutenção</p>
+            </div>
+
+            <div className="glass-card p-5">
+              <FileText className="w-5 h-5 text-primary mb-3" />
+              <p className="text-2xl font-bold text-foreground">
+                R$ {totalLoanAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </p>
+              <p className="text-sm text-muted-foreground">Valor em empréstimos</p>
             </div>
 
             <div className="glass-card p-5">
@@ -335,18 +429,27 @@ const AdminReports = () => {
                   labelStyle={chartTooltipLabelStyle}
                   itemStyle={chartTooltipItemStyle}
                   cursor={{ fill: "hsl(var(--primary) / 0.08)" }}
-                  formatter={(value: number, name: string) => [
-                    `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
-                    name === "fuel" ? "Combustível" : "Manutenção",
-                  ]}
+                  formatter={(value: number, name: string, item: { dataKey?: string | number }) => {
+                    const labels: Record<string, string> = {
+                      fuel: "Combustível",
+                      maintenance: "Manutenção",
+                      loans: "Empréstimos",
+                    };
+
+                    return [
+                      `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+                      labels[String(item.dataKey)] || name,
+                    ];
+                  }}
                 />
                 <Bar dataKey="fuel" name="Combustível" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
                 <Bar dataKey="maintenance" name="Manutenção" fill="hsl(var(--ring))" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="loans" name="Empréstimos" fill="hsl(var(--accent-foreground))" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
 
-          <div className="grid xl:grid-cols-2 gap-6">
+          <div className="grid xl:grid-cols-3 gap-6">
             <div className="glass-card p-6 space-y-4">
               <h3 className="text-lg font-semibold text-foreground">Últimos abastecimentos</h3>
 
@@ -427,6 +530,49 @@ const AdminReports = () => {
 
               {!filteredMaintenances.length ? (
                 <p className="text-sm text-muted-foreground">Nenhuma manutenção encontrada.</p>
+              ) : null}
+            </div>
+
+
+            <div className="glass-card p-6 space-y-4">
+              <h3 className="text-lg font-semibold text-foreground">Últimos empréstimos</h3>
+
+              {filteredLoans
+                .slice()
+                .sort(
+                  (a, b) =>
+                    new Date(b.start_date || b.created_at || 0).getTime() -
+                    new Date(a.start_date || a.created_at || 0).getTime()
+                )
+                .slice(0, 10)
+                .map((item) => {
+                  const vehicle = vehicleMap[item.vehicle_id];
+
+                  return (
+                    <div key={item.id} className="p-4 rounded-xl bg-secondary/40">
+                      <p className="font-medium text-foreground">
+                        {vehicle?.plate || item.vehicle_id} — Empréstimo
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Empresa: {item.company_name || "Não informada"}
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Valor: R$ {Number(item.amount || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {item.reason || "Sem motivo informado"}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {item.start_date
+                          ? new Date(item.start_date).toLocaleString("pt-BR")
+                          : "Sem data"}
+                      </p>
+                    </div>
+                  );
+                })}
+
+              {!filteredLoans.length ? (
+                <p className="text-sm text-muted-foreground">Nenhum empréstimo encontrado.</p>
               ) : null}
             </div>
           </div>

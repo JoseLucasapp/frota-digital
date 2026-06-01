@@ -4,6 +4,11 @@ const { ensureAdminScope } = require("./scope.service");
 const createLoansService = async (data, user) => {
     const payload = { ...data };
 
+    if (payload.driver_id === "") payload.driver_id = null;
+    if (payload.company_name === "") payload.company_name = null;
+    if (payload.amount === "") payload.amount = null;
+    if (payload.end_date === "") payload.end_date = null;
+
     if (user?.role === "ADMIN") {
         payload.admin_id = ensureAdminScope(user);
     }
@@ -77,7 +82,14 @@ const getLoanByIdService = async (id, user) => {
 const updateLoanService = async (id, data, user) => {
     if (!id) throw new Error("id is required");
 
-    let request = supabase.from("loans").update(data).eq("id", id);
+    const payload = { ...data };
+
+    if (payload.driver_id === "") payload.driver_id = null;
+    if (payload.company_name === "") payload.company_name = null;
+    if (payload.amount === "") payload.amount = null;
+    if (payload.end_date === "") payload.end_date = null;
+
+    let request = supabase.from("loans").update(payload).eq("id", id);
 
     if (user?.role === "ADMIN") {
         request = request.eq("admin_id", ensureAdminScope(user));

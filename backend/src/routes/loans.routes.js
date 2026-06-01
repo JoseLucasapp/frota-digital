@@ -27,11 +27,18 @@ module.exports = (router) => {
        *               reason: 
        *                 type: string
        *                 example: reason for the loan
+       *               amount:
+       *                 type: number
+       *                 example: 250.00
+       *               company_name:
+       *                 type: string
+       *                 example: Empresa beneficiada
        *               vehicle_id: 
        *                 type: string
        *                 example: 46b69d42-8c88-4fb5-825d-24e27b83f50b
        *               driver_id: 
        *                 type: string
+       *                 nullable: true
        *                 example: fd468bc3-fc74-4ea7-bda3-18870fb049ef
        *     responses:
        *       201:
@@ -140,11 +147,18 @@ module.exports = (router) => {
    *               reason: 
    *                 type: string
    *                 example: reason for the loan
+   *               amount:
+   *                 type: number
+   *                 example: 250.00
+   *               company_name:
+   *                 type: string
+   *                 example: Empresa beneficiada
    *               vehicle_id: 
    *                 type: string
    *                 example: 46b69d42-8c88-4fb5-825d-24e27b83f50b
    *               driver_id: 
    *                 type: string
+   *                 nullable: true
    *                 example: fd468bc3-fc74-4ea7-bda3-18870fb049ef
    *     responses:
    *       200:

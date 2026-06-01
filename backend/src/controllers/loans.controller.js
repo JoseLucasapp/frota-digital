@@ -10,10 +10,10 @@ const createLoanController = async (req, res) => {
     try {
         const data = req.body;
 
-        if (!data.start_date || !data.vehicle_id || !data.driver_id) {
+        if (!data.start_date || !data.vehicle_id) {
             return res.status(400).json({
                 success: false,
-                message: "start_date, end_date, reason, vehicle_id and driver_id are required",
+                message: "start_date and vehicle_id are required",
             });
         }
 
