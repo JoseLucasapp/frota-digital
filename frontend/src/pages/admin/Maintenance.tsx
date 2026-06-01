@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { useSearchParams } from "react-router-dom";
 import { Search, Plus, Wrench, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,8 @@ const AdminMaintenance = () => {
   const [editing, setEditing] = useState<any | null>(null);
   const [form, setForm] = useState<any>(initialForm);
   const [saving, setSaving] = useState(false);
+  const [searchParams] = useSearchParams();
+  const highlightedMaintenanceId = searchParams.get("highlight");
 
   const translatePriority = (value: string) => {
     return translateMaintenancePriority(value);
@@ -76,6 +79,11 @@ const AdminMaintenance = () => {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    const initialSearch = searchParams.get("busca");
+    if (initialSearch) setSearch(initialSearch);
+  }, [searchParams]);
 
   const vehiclesMap = useMemo(
     () => Object.fromEntries(vehicles.map((item) => [item.id, item])),
@@ -225,7 +233,7 @@ const AdminMaintenance = () => {
             const mechanic = mechanicsMap[item.mechanic_id];
 
             return (
-              <div key={item.id} className="flex flex-col gap-3 p-3 rounded-xl bg-secondary/40 sm:flex-row sm:items-center sm:justify-between">
+              <div key={item.id} className={`flex flex-col gap-3 rounded-xl p-3 sm:flex-row sm:items-center sm:justify-between ${highlightedMaintenanceId === item.id ? "bg-primary/10 ring-1 ring-primary" : "bg-secondary/40"}`}>
                 <div className="flex min-w-0 items-center gap-3">
                   <Wrench className="w-5 h-5 text-primary" />
                   <div>

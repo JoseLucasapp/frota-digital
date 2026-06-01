@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { useSearchParams } from "react-router-dom";
 import { Activity, Clock3, ExternalLink, MapPin, Navigation, Search, SquareParking } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -61,6 +62,7 @@ const AdminTracking = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
 
   const loadTracking = useCallback(async ({ showLoading = false } = {}) => {
     try {
@@ -96,6 +98,9 @@ const AdminTracking = () => {
   }, []);
 
   useEffect(() => {
+    const initialSearch = searchParams.get("busca");
+    if (initialSearch) setSearch(initialSearch);
+
     loadTracking({ showLoading: true });
 
     const intervalId = window.setInterval(() => {
@@ -105,7 +110,7 @@ const AdminTracking = () => {
     }, 5000);
 
     return () => window.clearInterval(intervalId);
-  }, [loadTracking]);
+  }, [loadTracking, searchParams]);
 
   const filteredVehicles = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -133,11 +138,17 @@ const AdminTracking = () => {
       return;
     }
 
+    const vehicleIdFromUrl = searchParams.get("vehicle_id");
+    if (vehicleIdFromUrl && filteredVehicles.some((item) => item.id === vehicleIdFromUrl)) {
+      setSelectedVehicleId(vehicleIdFromUrl);
+      return;
+    }
+
     const exists = filteredVehicles.some((item) => item.id === selectedVehicleId);
     if (!exists) {
       setSelectedVehicleId(filteredVehicles[0].id);
     }
-  }, [filteredVehicles, selectedVehicleId]);
+  }, [filteredVehicles, selectedVehicleId, searchParams]);
 
   const selectedVehicle = filteredVehicles.find((item) => item.id === selectedVehicleId) || null;
 
@@ -156,6 +167,7 @@ const AdminTracking = () => {
     return { total, online, offline, withAddress, stops };
   }, [vehicles, logs]);
 
+  const highlightedTrackingId = searchParams.get("tracking_id");
   const selectedMapEmbedUrl = selectedVehicle ? buildGoogleMapsEmbedUrl(selectedVehicle) : null;
   const selectedMapUrl = selectedVehicle?.google_maps_url || (selectedVehicle ? buildGoogleMapsUrl(selectedVehicle) : null);
 
@@ -189,7 +201,7 @@ const AdminTracking = () => {
           <p className="text-3xl font-bold text-success mt-2">{summary.online}</p>
         </div>
         <div className="glass-card p-5">
-          <p className="text-sm text-muted-foreground">Offline</p>
+          <p className="text-sm text-muted-foreground">Sem atualização</p>
           <p className="text-3xl font-bold text-destructive mt-2">{summary.offline}</p>
         </div>
         <div className="glass-card p-5">
@@ -229,7 +241,7 @@ const AdminTracking = () => {
                     <p className="font-mono text-primary text-sm mt-1">{vehicle.plate}</p>
                   </div>
                   <Badge className={vehicle.tracking_status === "ok" ? "bg-success/20 text-success border-0" : "bg-destructive/20 text-destructive border-0"}>
-                    {vehicle.tracking_status === "ok" ? "Atualizado" : "Offline"}
+                    {vehicle.tracking_status === "ok" ? "Atualizado" : "Sem atualização"}
                   </Badge>
                 </div>
 
@@ -327,7 +339,7 @@ const AdminTracking = () => {
                     const cleanedNotes = cleanTrackingNotes(log.notes);
 
                     return (
-                      <div key={log.id} className="rounded-xl border border-border bg-secondary/30 p-4">
+                      <div key={log.id} className={`rounded-xl border bg-secondary/30 p-4 ${highlightedTrackingId === log.id ? "border-primary ring-1 ring-primary" : "border-border"}`}>
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                           <div>
                             <div className="flex flex-wrap items-center gap-2">

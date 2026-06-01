@@ -72,14 +72,10 @@ const createDriverTrackingNotification = async ({ adminId, driverId, user, vehic
     (trackingLog.latitude != null && trackingLog.longitude != null
       ? `${trackingLog.latitude}, ${trackingLog.longitude}`
       : "Localização sem endereço");
-  const googleMapsUrl = buildGoogleMapsUrl(trackingLog);
-
   const messageParts = [
     `${driverName} atualizou o rastreamento de ${vehicleLabel}.`,
     `Local: ${location}.`,
   ];
-
-  if (googleMapsUrl) messageParts.push(`Google Maps: ${googleMapsUrl}`);
 
   try {
     await createNotificationsService(

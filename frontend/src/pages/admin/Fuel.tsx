@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { useSearchParams } from "react-router-dom";
 import { ExternalLink, Search, Plus, Fuel, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,8 @@ const AdminFuel = () => {
   const [editing, setEditing] = useState<any | null>(null);
   const [form, setForm] = useState<any>(initialForm);
   const [saving, setSaving] = useState(false);
+  const [searchParams] = useSearchParams();
+  const highlightedFuelingId = searchParams.get("highlight");
 
   const load = async () => {
     try {
@@ -61,6 +64,11 @@ const AdminFuel = () => {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    const initialSearch = searchParams.get("busca");
+    if (initialSearch) setSearch(initialSearch);
+  }, [searchParams]);
 
 
   const vehicleById = useMemo(
@@ -224,7 +232,7 @@ const AdminFuel = () => {
                 );
 
                 return (
-                  <tr key={fueling.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
+                  <tr key={fueling.id} className={`border-b transition-colors ${highlightedFuelingId === fueling.id ? "border-primary bg-primary/10" : "border-border/50 hover:bg-secondary/30"}`}>
                     <td className="p-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">

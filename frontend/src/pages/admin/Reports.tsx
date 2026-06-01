@@ -15,6 +15,17 @@ import { translateMaintenanceStatus } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+const chartTooltipStyle = {
+  backgroundColor: "hsl(var(--card))",
+  border: "1px solid hsl(var(--border))",
+  borderRadius: "0.75rem",
+  color: "hsl(var(--foreground))",
+  boxShadow: "0 12px 30px hsl(var(--background) / 0.35)",
+};
+
+const chartTooltipLabelStyle = { color: "hsl(var(--foreground))", fontWeight: 600 };
+const chartTooltipItemStyle = { color: "hsl(var(--foreground))" };
+
 const AdminReports = () => {
   const [fuelings, setFuelings] = useState<any[]>([]);
   const [maintenances, setMaintenances] = useState<any[]>([]);
@@ -320,6 +331,10 @@ const AdminReports = () => {
                 <XAxis dataKey="month" />
                 <YAxis />
                 <Tooltip
+                  contentStyle={chartTooltipStyle}
+                  labelStyle={chartTooltipLabelStyle}
+                  itemStyle={chartTooltipItemStyle}
+                  cursor={{ fill: "hsl(var(--primary) / 0.08)" }}
                   formatter={(value: number, name: string) => [
                     `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
                     name === "fuel" ? "Combustível" : "Manutenção",
